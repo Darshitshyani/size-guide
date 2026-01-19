@@ -32,3 +32,35 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+model Template {
+  id                 String   @id @default(uuid())
+  shop               String   // Shop domain for multi-tenant support
+  name               String   // Chart name (e.g., "Chart 4")
+  gender             String   // "Male" or "Female"
+  category           String   // Category ID (e.g., "pants", "shirts")
+  columns            String   // JSON string storing column definitions
+  rows               String   // JSON string storing row data
+  guideImage         String?  // URL to measurement guide image
+  measureDescription String?  // HTML description for measurements
+  isActive           Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  assignments ProductTemplateAssignment[]
+
+  @@index([shop])
+}
+
+model ProductTemplateAssignment {
+  id         String   @id @default(uuid())
+  shop       String   // Shop domain
+  productId  String   // Shopify product ID
+  templateId String   // Reference to Template
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([shop, productId]) // Each product can only have one template per shop
+  @@index([shop])
+  @@index([templateId])
+}
