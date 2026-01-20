@@ -378,7 +378,7 @@ export default function Templates() {
       // Template deleted - remove from list
       setTemplates(prev => prev.filter(t => t.id !== fetcher.data.deletedId));
       setDeleteConfirmTemplate(null);
-    } else if (fetcher.data?.success && fetcher.data?.assignedCount) {
+    } else if (fetcher.data?.success && fetcher.data?.assignedCount !== undefined) {
       // Products assigned - close modal and show success
       handleCloseAssignModal();
     } else if (fetcher.data?.error) {
