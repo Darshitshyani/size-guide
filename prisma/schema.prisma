@@ -64,3 +64,33 @@ model ProductTemplateAssignment {
   @@index([shop])
   @@index([templateId])
 }
+
+// Custom Size Tailor Models
+model TailorTemplate {
+  id           String   @id @default(uuid())
+  shop         String   // Shop domain for multi-tenant support
+  name         String   // Template name (e.g., "Custom Kurta Measurements")
+  gender       String   // "Male" or "Female"
+  clothingType String   // "shirt", "pants", "kurta", "kurti", etc.
+  fields       String   // JSON array of measurement field definitions
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignments TailorTemplateAssignment[]
+
+  @@index([shop])
+}
+
+model TailorTemplateAssignment {
+  id         String         @id @default(uuid())
+  shop       String         // Shop domain
+  productId  String         // Shopify product ID
+  templateId String         // Reference to TailorTemplate
+  template   TailorTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now())
+
+  @@unique([shop, productId]) // Each product can only have one tailor template per shop
+  @@index([shop])
+  @@index([templateId])
+}

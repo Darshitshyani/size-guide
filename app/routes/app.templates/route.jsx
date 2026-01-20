@@ -330,6 +330,7 @@ export default function Templates() {
   const [selectedGender, setSelectedGender] = useState("male");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [chartName, setChartName] = useState("");
+  const [nameError, setNameError] = useState("");
   const [chartColumns, setChartColumns] = useState([]);
   const [chartRows, setChartRows] = useState([]);
   const [guideImage, setGuideImage] = useState(null);
@@ -347,6 +348,7 @@ export default function Templates() {
   // Edit mode state
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState(null);
+  const [initialFormState, setInitialFormState] = useState(null);
 
   // Delete confirmation state
   const [deleteConfirmTemplate, setDeleteConfirmTemplate] = useState(null);
@@ -356,7 +358,7 @@ export default function Templates() {
     if (fetcher.data?.success && fetcher.data?.template) {
       // New template created - add to list
       const newTemplate = fetcher.data.template;
-      setTemplates(prev => [{
+      const formattedTemplate = {
         id: newTemplate.id,
         name: newTemplate.name,
         dateCreated: new Date(newTemplate.createdAt).toLocaleDateString("en-US", {
@@ -371,7 +373,16 @@ export default function Templates() {
         rows: typeof newTemplate.rows === 'string' ? JSON.parse(newTemplate.rows) : newTemplate.rows,
         guideImage: newTemplate.guideImage,
         measureDescription: newTemplate.measureDescription,
-      }, ...prev]);
+      };
+
+      setTemplates(prev => {
+        if (prev.some(t => t.id === formattedTemplate.id)) {
+          // Update existing template
+          return prev.map(t => t.id === formattedTemplate.id ? formattedTemplate : t);
+        }
+        // Add new template
+        return [formattedTemplate, ...prev];
+      });
       handleCloseCreateModal();
       setIsSaving(false);
     } else if (fetcher.data?.success && fetcher.data?.deletedId) {
@@ -472,6 +483,44 @@ export default function Templates() {
   };
 
   // Create Template Modal Handlers
+  const handleEditTemplate = (templateId) => {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) return;
+
+    setIsCreateModalOpen(true);
+    setCreateStep(2); // Jump to editor directly
+
+    const gender = template.gender.toLowerCase();
+    setSelectedGender(gender);
+
+    // Find category object
+    const categoryObj = categories[gender]?.find(c => c.id === template.category);
+    setSelectedCategory(categoryObj || null);
+
+    setChartName(template.name);
+    setChartColumns(template.columns || []);
+
+    // Ensure rows have IDs
+    const rowsWithIds = (template.rows || []).map((r, i) => ({ ...r, id: r.id || Date.now() + i }));
+    setChartRows(rowsWithIds);
+
+    setGuideImage(template.guideImage);
+    setMeasureDescription(template.measureDescription);
+
+    // Set initial state for dirty checking
+    setInitialFormState({
+      name: template.name,
+      // gender/category are handled in step 1 logic usually but we set them here
+      columns: template.columns || [],
+      rows: rowsWithIds, // Same reference as setChartRows
+      guideImage: template.guideImage,
+      measureDescription: template.measureDescription
+    });
+
+    setIsEditMode(true);
+    setEditingTemplateId(templateId);
+  };
+
   const handleOpenCreateModal = () => {
     setIsCreateModalOpen(true);
     setCreateStep(1);
@@ -726,6 +775,12 @@ export default function Templates() {
   const handleSaveTemplate = () => {
     if (!chartName.trim()) return;
 
+    // Check for duplicate name safeguard
+    if (templates.some(t => t.name.trim().toLowerCase() === chartName.trim().toLowerCase() && (!isEditMode || t.id !== editingTemplateId))) {
+      setNameError("A template with this name already exists");
+      return;
+    }
+
     setIsSaving(true);
 
     // Get latest description from ref
@@ -800,6 +855,28 @@ export default function Templates() {
 
   const tableTemplatesCount = templates.length;
   const customTemplatesCount = 2; // Placeholder count
+
+  // Filter templates
+  const filteredTemplates = templates.filter(template => {
+    // Search filtering
+    const searchLower = templateSearch.toLowerCase().trim();
+    const matchesSearch = !searchLower || (
+      (template.name && template.name.toLowerCase().includes(searchLower)) ||
+      (template.gender && template.gender.toLowerCase().includes(searchLower)) ||
+      (template.category && template.category.toLowerCase().includes(searchLower))
+    );
+
+    // Filter filtering
+    // filters: "All", "Male", "Female", "Active", "Inactive"
+    let matchesFilter = true;
+    if (selectedFilter === "Male") matchesFilter = template.gender === "Male";
+    else if (selectedFilter === "Female") matchesFilter = template.gender === "Female";
+    // Assuming isActive is boolean true/false or 1/0
+    else if (selectedFilter === "Active") matchesFilter = Boolean(template.isActive) === true;
+    else if (selectedFilter === "Inactive") matchesFilter = Boolean(template.isActive) === false;
+
+    return matchesSearch && matchesFilter;
+  });
 
   return (
     <div className="w-full h-screen flex flex-col bg-gray-50 overflow-hidden">
@@ -923,32 +1000,50 @@ export default function Templates() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {templates.length === 0 && (
+              {filteredTemplates.length === 0 && (
                 <tr>
                   <td colSpan="5" className="px-6 py-32 text-center text-gray-500 bg-white">
-                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
-                      <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                        </svg>
+                    {templates.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                          <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                          </svg>
+                        </div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-1">Create first template</h3>
+                        <p className="text-sm text-gray-500 mb-6 text-balance">Get started by creating your first size chart template to assign to your products.</p>
+                        <button
+                          onClick={handleOpenCreateModal}
+                          className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors duration-200"
+                        >
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          Create Table Template
+                        </button>
                       </div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-1">Create first template</h3>
-                      <p className="text-sm text-gray-500 mb-6 text-balance">Get started by creating your first size chart template to assign to your products.</p>
-                      <button
-                        onClick={handleOpenCreateModal}
-                        className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors duration-200"
-                      >
-                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Create Table Template
-                      </button>
-                    </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                          <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                        </div>
+                        <h3 className="text-base font-medium text-gray-900 mb-1">No templates found</h3>
+                        <p className="text-sm text-gray-500 mb-4">No templates match your current filters.</p>
+                        <button
+                          onClick={() => { setTemplateSearch(""); setSelectedFilter("All"); }}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                        >
+                          Clear all filters
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               )}
-              {templates.map((template, index) => (
-                <tr key={template.id} className={`hover:bg-gray-50 transition-colors duration-150 ${index === templates.length - 1 ? 'border-b border-gray-200' : ''}`}>
+              {filteredTemplates.map((template, index) => (
+                <tr key={template.id} className={`hover:bg-gray-50 transition-colors duration-150 ${index === filteredTemplates.length - 1 ? 'border-b border-gray-200' : ''}`}>
                   <td className="px-5 py-3.5 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{template.name}</div>
                   </td>
@@ -983,6 +1078,7 @@ export default function Templates() {
                       </button>
                       <button
                         type="button"
+                        onClick={(e) => { e.stopPropagation(); handleEditTemplate(template.id); }}
                         className="p-2  flex items-center gap-1.5 text-sm  font-medium text-gray-400 text-gray-600 bg-gray-100 rounded-md transition-all duration-200 border  border border-gray-200"
                         title="Edit"
                       >
@@ -1126,79 +1222,52 @@ export default function Templates() {
               })()}
 
               {/* How to Measure Content */}
-              {modalSubTab === "How to Measure" && (
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-6">How to measure</h3>
+              {modalMainTab === "Table Chart" && modalSubTab === "How to Measure" && (() => {
+                const currentTemplate = templates.find(t => t.id === viewModalTemplate);
+                if (!currentTemplate) return <div className="p-4 text-red-500">Template data not found</div>;
 
-                  <div className="flex gap-8 flex-col lg:flex-row">
-                    {/* Image Placeholder */}
-                    <div className="flex-1 flex justify-center items-start">
-                      <div className="w-full max-w-md bg-white border-2 border-dashed border-gray-300 rounded-lg p-12 flex flex-col items-center justify-center">
-                        {/* Mountain Icon with Sun */}
-                        <svg
-                          viewBox="0 0 120 80"
-                          className="w-32 h-20 mb-4"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          {/* Sun */}
-                          <circle cx="25" cy="20" r="8" fill="#9ca3af" opacity="0.6" />
-                          <circle cx="25" cy="20" r="6" fill="#d1d5db" />
+                return (
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-6">How to measure</h3>
 
-                          {/* Mountains */}
-                          <path
-                            d="M 20 60 L 35 40 L 45 55 L 60 30 L 75 50 L 85 35 L 100 50 L 105 45 L 110 50 L 120 60 L 20 60 Z"
-                            fill="#d1d5db"
-                            stroke="#9ca3af"
-                            strokeWidth="1"
+                    <div className="flex gap-8 flex-col lg:flex-row">
+                      {/* Image */}
+                      <div className="flex-1 flex justify-center items-start">
+                        {currentTemplate.guideImage ? (
+                          <div className="w-full max-w-md border border-gray-200 rounded-lg p-2 bg-white">
+                            <img
+                              src={currentTemplate.guideImage}
+                              alt={`${currentTemplate.name} Guide`}
+                              className="w-full h-auto rounded object-contain"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-full max-w-md bg-white border-2 border-dashed border-gray-300 rounded-lg p-12 flex flex-col items-center justify-center">
+                            <svg className="w-16 h-16 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <p className="text-gray-500 text-sm">No guide image available</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Instructions */}
+                      <div className="flex-1">
+                        {currentTemplate.measureDescription ? (
+                          <div
+                            className="prose prose-sm max-w-none text-gray-600 [&_h4]:text-lg [&_h4]:font-semibold [&_h4]:text-gray-900 [&_h4]:mb-2 [&_h4]:flex [&_h4]:items-center [&_h4]:gap-2 [&_p]:text-gray-600 [&_p]:leading-relaxed [&_p]:mb-4"
+                            dangerouslySetInnerHTML={{ __html: currentTemplate.measureDescription }}
                           />
-                          <path
-                            d="M 30 60 L 40 48 L 50 55 L 60 40 L 75 52 L 85 38 L 95 50 L 110 60 L 30 60 Z"
-                            fill="#e5e7eb"
-                          />
-                        </svg>
-
-                        {/* Placeholder Text */}
-                        <p className="text-gray-600 text-sm font-medium text-center">
-                          No guide image available
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Instructions */}
-                    <div className="flex-1 space-y-6">
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                          <span className="w-4 h-4 rounded-full bg-blue-600 flex-shrink-0"></span>
-                          Waist
-                        </h4>
-                        <p className="text-gray-600 leading-relaxed text-sm">
-                          Wrap the tape around the narrowest part of your waist. Keep it parallel to the floor and snug but not tight.
-                        </p>
-                      </div>
-
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                          <span className="w-4 h-4 rounded-full bg-green-600 flex-shrink-0"></span>
-                          Hip
-                        </h4>
-                        <p className="text-gray-600 leading-relaxed text-sm">
-                          Measure around the widest part of your hips and seat, keeping the tape horizontal.
-                        </p>
-                      </div>
-
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                          <span className="w-4 h-4 rounded-full bg-amber-600 flex-shrink-0"></span>
-                          Inseam
-                        </h4>
-                        <p className="text-gray-600 leading-relaxed text-sm">
-                          Measure from the crotch seam down to the bottom of the leg. Stand straight while taking this measurement.
-                        </p>
+                        ) : (
+                          <div className="text-gray-500 italic p-4 bg-gray-50 rounded-lg text-center">
+                            No measurement instructions provided for this template.
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1391,7 +1460,7 @@ export default function Templates() {
               {/* Modal Header */}
               <div className="flex items-center justify-between p-5 border-b border-gray-200">
                 <h2 className="text-xl font-bold text-gray-900">
-                  {createStep === 1 ? "Create Size Chart" : "Create Size Chart Details"}
+                  {isEditMode ? "Edit Table Template" : (createStep === 1 ? "Create Size Chart" : "Create Size Chart Details")}
                 </h2>
                 <button
                   type="button"
@@ -1482,10 +1551,34 @@ export default function Templates() {
                       <input
                         type="text"
                         value={chartName}
-                        onChange={(e) => setChartName(e.target.value)}
+                        onChange={(e) => {
+                          const newName = e.target.value;
+                          setChartName(newName);
+
+                          // Check for duplicate name
+                          const isDuplicate = templates.some(t =>
+                            t.name.trim().toLowerCase() === newName.trim().toLowerCase() &&
+                            (!isEditMode || t.id !== editingTemplateId)
+                          );
+
+                          if (isDuplicate) {
+                            setNameError("A template with this name already exists");
+                          } else {
+                            setNameError("");
+                          }
+                        }}
                         placeholder="Name"
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm ${nameError ? "border-red-300 focus:border-red-500 focus:ring-red-500" : "border-gray-300"
+                          }`}
                       />
+                      {nameError && (
+                        <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {nameError}
+                        </p>
+                      )}
                     </div>
 
                     {/* Size Chart Table */}
@@ -1798,8 +1891,20 @@ export default function Templates() {
                       <button
                         type="button"
                         onClick={handleSaveTemplate}
-                        disabled={!chartName.trim() || isSaving}
-                        className={`flex items-center cursor-pointer gap-2 px-5 py-2.5 text-sm font-semibold rounded-md transition-all duration-200 ${!chartName.trim() || isSaving
+                        disabled={!chartName.trim() || isSaving || !!nameError || (isEditMode && initialFormState && (
+                          chartName === initialFormState.name &&
+                          JSON.stringify(chartColumns) === JSON.stringify(initialFormState.columns) &&
+                          JSON.stringify(chartRows) === JSON.stringify(initialFormState.rows) &&
+                          (guideImage || "") === (initialFormState.guideImage || "") &&
+                          (measureDescription || "") === (initialFormState.measureDescription || "")
+                        ))}
+                        className={`flex items-center cursor-pointer gap-2 px-5 py-2.5 text-sm font-semibold rounded-md transition-all duration-200 ${!chartName.trim() || isSaving || !!nameError || (isEditMode && initialFormState && (
+                          chartName === initialFormState.name &&
+                          JSON.stringify(chartColumns) === JSON.stringify(initialFormState.columns) &&
+                          JSON.stringify(chartRows) === JSON.stringify(initialFormState.rows) &&
+                          (guideImage || "") === (initialFormState.guideImage || "") &&
+                          (measureDescription || "") === (initialFormState.measureDescription || "")
+                        ))
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                           : "bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-md hover:shadow-lg"
                           }`}
@@ -1985,34 +2090,73 @@ export default function Templates() {
           }}
         >
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Delete Template</h3>
-                <p className="text-sm text-gray-600">Are you sure you want to delete "{deleteConfirmTemplate.name}"?</p>
-              </div>
-            </div>
-            <p className="text-sm text-gray-500 mb-6">This action cannot be undone. All products assigned to this template will be unassigned.</p>
-            <div className="flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={() => setDeleteConfirmTemplate(null)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDeleteTemplate(deleteConfirmTemplate.id)}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
-              >
-                Delete
-              </button>
-            </div>
+            {(() => {
+              const assignedCount = products?.filter(p => p.assignedTemplateId === deleteConfirmTemplate.id).length || 0;
+
+              if (assignedCount > 0) {
+                return (
+                  <>
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-gray-900">Cannot Delete Template</h3>
+                        <p className="text-sm text-gray-600">Template "{deleteConfirmTemplate.name}" is currently in use.</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-500 mb-6">
+                      This template is currently assigned to <strong className="text-gray-900">{assignedCount} products</strong>.
+                      You must unassign it from all products before it can be deleted.
+                    </p>
+                    <div className="flex gap-3 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirmTemplate(null)}
+                        className="px-4 py-2 cursor-pointer text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </>
+                );
+              }
+
+              return (
+                <>
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Delete Template</h3>
+                      <p className="text-sm text-gray-600">Are you sure you want to delete "{deleteConfirmTemplate.name}"?</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-6">This action cannot be undone. All products assigned to this template will be unassigned.</p>
+                  <div className="flex gap-3 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmTemplate(null)}
+                      className="px-4 py-2 cursor-pointer text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTemplate(deleteConfirmTemplate.id)}
+                      className="px-4 py-2 cursor-pointer text-sm font-medium text-red-600 bg-red-100 rounded-md hover:bg-red-700 transition-colors border border-red-300"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
