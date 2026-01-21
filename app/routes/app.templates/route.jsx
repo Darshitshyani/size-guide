@@ -343,6 +343,7 @@ export const action = async ({ request }) => {
 export default function Templates() {
   const { templates: initialTemplates, customTemplates: initialCustomTemplates, products: shopifyProducts } = useLoaderData();
   const fetcher = useFetcher();
+  const uploadFetcher = useFetcher();
   const [templates, setTemplates] = useState(initialTemplates || []);
   const [customTemplates, setCustomTemplates] = useState(initialCustomTemplates || []);
   const [activeTab, setActiveTab] = useState("Table Templates");
@@ -370,6 +371,7 @@ export default function Templates() {
   const [chartColumns, setChartColumns] = useState([]);
   const [chartRows, setChartRows] = useState([]);
   const [guideImage, setGuideImage] = useState(null);
+  const [pendingGuideImage, setPendingGuideImage] = useState(null);
   const [measureDescription, setMeasureDescription] = useState("");
   const [draggedColumnIndex, setDraggedColumnIndex] = useState(null);
   const [editingColumnKey, setEditingColumnKey] = useState(null);
@@ -443,6 +445,13 @@ export default function Templates() {
       console.error("Error:", fetcher.data.error);
     }
   }, [fetcher.data]);
+
+  // Handle image upload completion
+  useEffect(() => {
+    if (uploadFetcher.state === "idle" && uploadFetcher.data?.url) {
+      setGuideImage(uploadFetcher.data.url);
+    }
+  }, [uploadFetcher.state, uploadFetcher.data]);
 
   // Sync with loader data when it changes
   useEffect(() => {
@@ -551,7 +560,10 @@ export default function Templates() {
     const rowsWithIds = (template.rows || []).map((r, i) => ({ ...r, id: r.id || Date.now() + i }));
     setChartRows(rowsWithIds);
 
+
+
     setGuideImage(template.guideImage);
+    setPendingGuideImage(null);
     setMeasureDescription(template.measureDescription);
 
     // Set initial state for dirty checking
@@ -576,7 +588,9 @@ export default function Templates() {
     setChartName("");
     setChartColumns([]);
     setChartRows([]);
+
     setGuideImage(null);
+    setPendingGuideImage(null);
     setMeasureDescription("• Measurement Instructions:\n  Please follow these guidelines to ensure accurate measurements for the best fit.\n\n• Tip:\n  Use a flexible measuring tape for best results.");
   };
 
@@ -819,7 +833,7 @@ export default function Templates() {
   };
 
   // Save template to database
-  const handleSaveTemplate = () => {
+  const handleSaveTemplate = async () => {
     if (!chartName.trim()) return;
 
     // Check for duplicate name safeguard
@@ -829,6 +843,31 @@ export default function Templates() {
     }
 
     setIsSaving(true);
+
+    let finalGuideImage = guideImage;
+
+    // Upload image if a new file is selected
+    if (pendingGuideImage) {
+      try {
+        const uploadFormData = new FormData();
+        uploadFormData.append("file", pendingGuideImage);
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          body: uploadFormData,
+        });
+        const data = await response.json();
+        if (data.url) {
+          finalGuideImage = data.url;
+        } else {
+          console.error("Upload failed", data.error);
+          // Optional: handle error user facing
+        }
+      } catch (error) {
+        console.error("Upload failed", error);
+        setIsSaving(false);
+        return;
+      }
+    }
 
     // Get latest description from ref
     const finalDescription = descriptionContentRef.current || measureDescription;
@@ -843,7 +882,7 @@ export default function Templates() {
     formData.append("category", selectedCategory?.id || "custom");
     formData.append("columns", JSON.stringify(chartColumns));
     formData.append("rows", JSON.stringify(chartRows.map(({ id, ...rest }) => rest)));
-    formData.append("guideImage", guideImage || "");
+    formData.append("guideImage", finalGuideImage || "");
     formData.append("measureDescription", finalDescription || "");
 
     fetcher.submit(formData, { method: "POST" });
@@ -1938,8 +1977,12 @@ export default function Templates() {
                       <div className="flex gap-6 items-start">
                         {/* Guide Image */}
                         <div className="flex-shrink-0">
-                          {guideImage ? (
-                            <img src={guideImage} alt="Guide" className="w-56 h-auto rounded-md border border-gray-200 object-contain" />
+                          {(pendingGuideImage || guideImage) ? (
+                            <img
+                              src={pendingGuideImage ? URL.createObjectURL(pendingGuideImage) : guideImage}
+                              alt="Guide"
+                              className="w-56 h-auto rounded-md border border-gray-200 object-contain"
+                            />
                           ) : (
                             <div className="w-56 h-64 bg-gray-50 border border-dashed border-gray-300 rounded-md flex items-center justify-center">
                               <span className="text-gray-400 text-sm">No image</span>
@@ -1958,18 +2001,19 @@ export default function Templates() {
                                   accept="image/*"
                                   className="hidden"
                                   onChange={(e) => {
-                                    // Handle file upload
                                     const file = e.target.files?.[0];
                                     if (file) {
-                                      // You can handle file upload here
+                                      setPendingGuideImage(file);
                                     }
                                   }}
                                 />
                                 <span className="px-4 py-2 text-sm font-medium bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors inline-block">
-                                  Choose File
+                                  {uploadFetcher.state !== "idle" ? "Uploading..." : "Choose File"}
                                 </span>
                               </label>
-                              <span className="text-sm text-gray-500">No file chosen (Optional)</span>
+                              <span className="text-sm text-gray-500">
+                                {pendingGuideImage ? pendingGuideImage.name : "No file chosen (Optional)"}
+                              </span>
                             </div>
                             <a href="#" className="text-sm text-blue-600 hover:text-blue-700 underline">
                               Upload an image to show measurement instructions to customers
@@ -2080,6 +2124,7 @@ export default function Templates() {
                           JSON.stringify(chartColumns) === JSON.stringify(initialFormState.columns) &&
                           JSON.stringify(chartRows) === JSON.stringify(initialFormState.rows) &&
                           (guideImage || "") === (initialFormState.guideImage || "") &&
+                          !pendingGuideImage &&
                           (measureDescription || "") === (initialFormState.measureDescription || "")
                         ))}
                         className={`flex items-center cursor-pointer gap-2 px-5 py-2.5 text-sm font-semibold rounded-md transition-all duration-200 ${!chartName.trim() || isSaving || !!nameError || (isEditMode && initialFormState && (
@@ -2087,6 +2132,7 @@ export default function Templates() {
                           JSON.stringify(chartColumns) === JSON.stringify(initialFormState.columns) &&
                           JSON.stringify(chartRows) === JSON.stringify(initialFormState.rows) &&
                           (guideImage || "") === (initialFormState.guideImage || "") &&
+                          !pendingGuideImage &&
                           (measureDescription || "") === (initialFormState.measureDescription || "")
                         ))
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"

@@ -241,6 +241,7 @@ export default function CustomTailor() {
     const [previewSelectedCollar, setPreviewSelectedCollar] = useState(null);
     const [infoModalField, setInfoModalField] = useState(null);
     const [editModalField, setEditModalField] = useState(null);
+    const [editModalFile, setEditModalFile] = useState(null);
     const [assignModalTemplate, setAssignModalTemplate] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [selectedProducts, setSelectedProducts] = useState([]);
@@ -381,29 +382,21 @@ export default function CustomTailor() {
 
     const handleFileUpload = (event) => {
         const file = event.target.files?.[0];
-        if (file) {
-            const formData = new FormData();
-            formData.append("file", file);
-            uploadFetcher.submit(formData, { method: "post", action: "/api/upload", encType: "multipart/form-data" });
+        if (!file) return;
+
+        if (editModalField) {
+            setEditModalFile(file);
+        } else if (uploadCollarIndex !== null) {
+            const newCollars = [...collarOptions];
+            if (newCollars[uploadCollarIndex]) {
+                newCollars[uploadCollarIndex].file = file;
+                setCollarOptions(newCollars);
+            }
+            setUploadCollarIndex(null);
         }
     };
 
-    useEffect(() => {
-        if (uploadFetcher.state === "idle" && uploadFetcher.data?.url) {
-            if (editModalField) {
-                setEditModalField(prev => prev ? ({ ...prev, image: uploadFetcher.data.url }) : null);
-            } else if (uploadCollarIndex !== null) {
-                const newCollars = [...collarOptions];
-                if (newCollars[uploadCollarIndex]) {
-                    newCollars[uploadCollarIndex].image = uploadFetcher.data.url;
-                    setCollarOptions(newCollars);
-                }
-                setUploadCollarIndex(null);
-            }
-        }
-    }, [uploadFetcher.data, uploadFetcher.state]);
-
-    const handleSaveTemplate = () => {
+    const handleSaveTemplate = async () => {
         setNameError(false);
         setDuplicateNameError(false);
         setFieldsError(false);
@@ -427,17 +420,59 @@ export default function CustomTailor() {
 
         if (hasValidationError) return;
 
+        // Process collar images uploads if needed
+        let finalCollarOptions = [...collarOptions];
+        if (enableCollarOption) {
+            const uploadPromises = finalCollarOptions.map(async (collar) => {
+                if (collar.file) {
+                    try {
+                        const fd = new FormData();
+                        fd.append("file", collar.file);
+                        const res = await fetch("/api/upload", { method: "POST", body: fd });
+                        const data = await res.json();
+                        if (data.url) {
+                            return { ...collar, image: data.url, file: undefined }; // Remove file, update image
+                        }
+                    } catch (e) {
+                        console.error("Collar upload failed", e);
+                    }
+                }
+                const { file, ...rest } = collar; // Ensure file is removed even if no upload
+                return rest;
+            });
+            finalCollarOptions = await Promise.all(uploadPromises);
+        }
+
+        // Process measurement fields images uploads
+        const finalMeasurementFields = await Promise.all(enabledFields.map(async (field) => {
+            if (field.file) {
+                try {
+                    const fd = new FormData();
+                    fd.append("file", field.file);
+                    const res = await fetch("/api/upload", { method: "POST", body: fd });
+                    const data = await res.json();
+                    if (data.url) {
+                        return { ...field, image: data.url, file: undefined };
+                    }
+                } catch (e) {
+                    console.error("Field upload failed", e);
+                }
+            }
+            const { file, ...rest } = field;
+            return rest;
+        }));
+
         const formData = new FormData();
         formData.append("intent", "create");
         formData.append("name", templateName);
         formData.append("gender", "Male");
         formData.append("clothingType", selectedPreset.id);
-        formData.append("fields", JSON.stringify(enabledFields.map(({ id, enabled, ...rest }) => rest)));
+        formData.append("fields", JSON.stringify(finalMeasurementFields.map(({ id, enabled, ...rest }) => rest)));
         if (enableFitPreference) {
             formData.append("fitPreferences", JSON.stringify(fitPreferences));
         }
         if (enableCollarOption) {
-            formData.append("collarOptions", JSON.stringify(collarOptions));
+            formData.append("collarOptions", JSON.stringify(finalCollarOptions));
         }
 
         fetcher.submit(formData, { method: "POST" });
@@ -600,7 +635,7 @@ export default function CustomTailor() {
                                                 </div>
                                                 <p className="text-sm text-gray-500 mb-1 line-clamp-2">{field.instruction}</p>
                                                 <p className="text-xs text-gray-400">Range: {field.range} {field.unit}</p>
-                                                {!field.image && (
+                                                {(!field.image && !field.file) && (
                                                     <div className="flex items-start gap-1.5 mt-2 text-amber-600">
                                                         <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -642,7 +677,12 @@ export default function CustomTailor() {
                                                 </button>
                                                 {/* Edit - Pencil icon */}
                                                 <button
-                                                    onClick={() => setEditModalField({ ...field })}
+                                                    onClick={() => {
+                                                        setEditModalField({ ...field });
+                                                        if (field.file) {
+                                                            setEditModalFile(field.file);
+                                                        }
+                                                    }}
                                                     disabled={!field.enabled}
                                                     className={`p-1.5 rounded-full ${!field.enabled ? "text-gray-300 cursor-not-allowed" : "text-amber-500 hover:bg-amber-50 cursor-pointer"}`}
                                                     title="Edit field"
@@ -758,8 +798,8 @@ export default function CustomTailor() {
                                                 {/* Image Upload Box */}
                                                 <div className="relative flex-shrink-0">
                                                     <div className="w-24 h-24 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-white hover:border-blue-500 transition-colors cursor-pointer">
-                                                        {collar.image ? (
-                                                            <img src={collar.image} alt={collar.name} className="w-full h-full object-contain p-1" />
+                                                        {(collar.file || collar.image) ? (
+                                                            <img src={collar.file ? URL.createObjectURL(collar.file) : collar.image} alt={collar.name} className="w-full h-full object-contain p-1" />
                                                         ) : (
                                                             <div className="flex flex-col items-center gap-1">
                                                                 <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -928,7 +968,12 @@ export default function CustomTailor() {
 
             {/* Edit Field Modal */}
             {editModalField && (
-                <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center" onClick={(e) => { if (e.target === e.currentTarget) setEditModalField(null); }}>
+                <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center" onClick={(e) => {
+                    if (e.target === e.currentTarget) {
+                        setEditModalField(null);
+                        setEditModalFile(null); // Reset file on close
+                    }
+                }}>
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
                         <div className="flex items-center justify-between p-4 border-b border-gray-200">
                             <h2 className="text-lg font-bold text-gray-900">Edit Measurement Field</h2>
@@ -990,8 +1035,8 @@ export default function CustomTailor() {
                                     {/* Image Preview Box */}
                                     <div className="relative flex-shrink-0">
                                         <div className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50 hover:border-blue-500 transition-colors relative">
-                                            {editModalField.image ? (
-                                                <img src={editModalField.image} alt="Guide" className="w-full h-full object-cover" />
+                                            {(editModalFile || editModalField.image) ? (
+                                                <img src={editModalFile ? URL.createObjectURL(editModalFile) : editModalField.image} alt="Guide" className="w-full h-full object-cover" />
                                             ) : (
                                                 <div className="flex flex-col items-center gap-1">
                                                     <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1038,7 +1083,10 @@ export default function CustomTailor() {
                         </div>
                         <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-gray-200">
                             <button
-                                onClick={() => setEditModalField(null)}
+                                onClick={() => {
+                                    setEditModalField(null);
+                                    setEditModalFile(null);
+                                }}
                                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
                             >
                                 Cancel
@@ -1049,10 +1097,14 @@ export default function CustomTailor() {
                                     handleUpdateField(editModalField.id, "unit", editModalField.unit);
                                     handleUpdateField(editModalField.id, "range", editModalField.range);
                                     handleUpdateField(editModalField.id, "instruction", editModalField.instruction);
-                                    handleUpdateField(editModalField.id, "image", editModalField.image);
+                                    // Store the file object in the field state for later upload
+                                    if (editModalFile) {
+                                        handleUpdateField(editModalField.id, "file", editModalFile);
+                                    }
+
                                     handleUpdateField(editModalField.id, "required", editModalField.required);
                                     setEditModalField(null);
-                                    setEditModalField(null);
+                                    setEditModalFile(null);
                                 }}
                                 className="px-5 py-2 text-sm font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 cursor-pointer"
                             >
