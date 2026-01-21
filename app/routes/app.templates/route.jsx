@@ -925,6 +925,26 @@ export default function Templates() {
     return matchesSearch && matchesFilter;
   });
 
+  const filteredCustomTemplates = customTemplates.filter(template => {
+    // Search filtering
+    const searchLower = templateSearch.toLowerCase().trim();
+    const matchesSearch = !searchLower || (
+      (template.name && template.name.toLowerCase().includes(searchLower)) ||
+      (template.gender && template.gender.toLowerCase().includes(searchLower)) ||
+      (template.clothingType && template.clothingType.toLowerCase().includes(searchLower))
+    );
+
+    // Filter filtering
+    let matchesFilter = true;
+    if (selectedFilter === "Male") matchesFilter = template.gender === "Male";
+    else if (selectedFilter === "Female") matchesFilter = template.gender === "Female";
+    // Assuming isActive is boolean true/false or 1/0
+    else if (selectedFilter === "Active") matchesFilter = Boolean(template.isActive) === true;
+    else if (selectedFilter === "Inactive") matchesFilter = Boolean(template.isActive) === false;
+
+    return matchesSearch && matchesFilter;
+  });
+
   return (
     <div className="w-full h-screen flex flex-col bg-gray-50 overflow-hidden">
       {/* Main Content */}
@@ -1187,7 +1207,7 @@ export default function Templates() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {customTemplates.length === 0 && (
+                {filteredCustomTemplates.length === 0 && (
                   <tr>
                     <td colSpan="6" className="px-6 py-32 text-center text-gray-500 bg-white">
                       <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
@@ -1196,14 +1216,14 @@ export default function Templates() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                           </svg>
                         </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-1">No custom templates yet</h3>
-                        <p className="text-sm text-gray-500 mb-6 text-balance">Create custom measurement templates using the Measurement Template Builder in the Custom Tailor section.</p>
+                        <h3 className="text-lg font-medium text-gray-900 mb-1">No custom templates match your search</h3>
+                        <p className="text-sm text-gray-500 mb-6 text-balance">Try adjusting your filters or search terms.</p>
                       </div>
                     </td>
                   </tr>
                 )}
-                {customTemplates.map((template, index) => (
-                  <tr key={template.id} className={`hover:bg-gray-50 transition-colors duration-150 ${index === customTemplates.length - 1 ? 'border-b border-gray-200' : ''}`}>
+                {filteredCustomTemplates.map((template, index) => (
+                  <tr key={template.id} className={`hover:bg-gray-50 transition-colors duration-150 ${index === filteredCustomTemplates.length - 1 ? 'border-b border-gray-200' : ''}`}>
                     <td className="px-5 py-3.5 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{template.name}</div>
                     </td>
