@@ -6,80 +6,71 @@ import { authenticate } from "../../shopify.server";
 // Predefined tailor presets with default measurement fields
 const tailorPresets = [
     {
-        id: "mens-shirt",
-        label: "Men's Shirt",
+        id: "male-shirt",
+        label: "Shirt",
+        gender: "male",
         defaultFields: [
-            { name: "Chest / Bust", unit: "in", required: true, instruction: "Measure around the fullest part of your chest, keeping the tape measure horizontal and parallel to the ground.", range: "35 - 60" },
-            { name: "Waist", unit: "in", required: true, instruction: "Wrap the measuring tape around your torso at the smallest part of your waist. Typically this is an inch or so above your belly button.", range: "28 - 50" },
-            { name: "Hip", unit: "in", required: false, instruction: "Wrap the measuring tape around the widest part of your hips and seat, keeping the tape parallel to the ground.", range: "35 - 60" },
-            { name: "Shoulder", unit: "in", required: true, instruction: "Measure from the edge of one shoulder bone to the edge of the other shoulder bone, across the back.", range: "15 - 24" },
-            { name: "Sleeve Length", unit: "in", required: false, instruction: "Measure from the shoulder point (where shoulder meets arm) down to your desired sleeve length (wrist, elbow, or any custom length).", range: "0 - 40" },
-            { name: "Armhole", unit: "in", required: false, instruction: "Measure around the arm where it meets the shoulder, keeping the tape snug but not tight.", range: "10 - 30" },
-            { name: "Neck", unit: "in", required: false, instruction: "Measure around the base of your neck where the collar would sit. Keep the tape comfortably loose.", range: "10 - 20" },
-            { name: "Length", unit: "in", required: true, instruction: "Measure from the top of the garment (shoulder or neck) down to the desired bottom hem length.", range: "18 - 60" },
-        ],
+            { name: "Chest", unit: "in", required: true, instruction: "Measure around the fullest part of the chest.", range: "35 - 60", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/%C2%A0male+chest.png" },
+            { name: "Waist", unit: "in", required: true, instruction: "Measure around natural waist.", range: "28 - 50", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/male+waist.png" },
+            { name: "Hip", unit: "in", required: false, instruction: "Measure around the widest part of hips.", range: "35 - 60", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/male+hips.png" },
+            { name: "Shoulder", unit: "in", required: true, instruction: "Measure shoulder to shoulder.", range: "15 - 24", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/male+shoulder.png" },
+            { name: "Sleeve Length", unit: "in", required: false, instruction: "Measure from shoulder to wrist.", range: "20 - 40", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/male+full+sleeves.png" },
+            { name: "Neck", unit: "in", required: false, instruction: "Measure around base of neck.", range: "10 - 20", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/male+nack.png" },
+            { name: "Length", unit: "in", required: true, instruction: "Measure shoulder to hem.", range: "18 - 60", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/male+shirt+length.png" }
+        ]
     },
     {
-        id: "mens-kurta",
-        label: "Men's Kurta",
+        id: "male-pants",
+        label: "Pants",
+        gender: "male",
         defaultFields: [
-            { name: "Chest", unit: "in", required: true, instruction: "Measure around the fullest part of your chest.", range: "35 - 60" },
-            { name: "Shoulder", unit: "in", required: true, instruction: "Measure from shoulder edge to shoulder edge.", range: "15 - 24" },
-            { name: "Kurta Length", unit: "in", required: true, instruction: "Measure from shoulder to desired length.", range: "30 - 50" },
-            { name: "Sleeve Length", unit: "in", required: true, instruction: "Measure from shoulder to wrist.", range: "20 - 35" },
-        ],
+            { name: "Waist", unit: "in", required: true, instruction: "Measure waist.", range: "28 - 50", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/male+waist.png" },
+            { name: "Hip", unit: "in", required: true, instruction: "Measure hips.", range: "35 - 60", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/male+hips.png" },
+            { name: "Thigh", unit: "in", required: false, instruction: "Measure thigh.", range: "15 - 40", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/male+thigh.png" },
+            { name: "Inseam", unit: "in", required: true, instruction: "Measure inseam.", range: "25 - 38", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/male+crotch.png" },
+            { name: "Outseam", unit: "in", required: false, instruction: "Measure outseam.", range: "35 - 45", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/male+pant+length.png" }
+        ]
+    },
+    { id: "male-custom", label: "Custom", gender: "male", defaultFields: [] },
+    {
+        id: "female-dress",
+        label: "Dress",
+        gender: "female",
+        defaultFields: [
+            { name: "Bust", unit: "in", required: true, instruction: "Measure bust.", range: "30 - 50", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/female+bust.png" },
+            { name: "Waist", unit: "in", required: true, instruction: "Measure waist.", range: "24 - 45", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/femlae+waist%0D%0A%0D%0A.png" },
+            { name: "Hip", unit: "in", required: true, instruction: "Measure hips.", range: "35 - 55", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/female+hips.png" },
+            { name: "Length", unit: "in", required: true, instruction: "Measure shoulder to hem.", range: "35 - 65", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/female+shirt+length.png" },
+            { name: "Sleeve Length", unit: "in", required: false, instruction: "Measure sleeve.", range: "4 - 24", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/female+sleeves.png" }
+        ]
     },
     {
-        id: "womens-blouse",
-        label: "Women's Blouse",
+        id: "female-blouse",
+        label: "Blouse",
+        gender: "female",
         defaultFields: [
-            { name: "Bust", unit: "in", required: true, instruction: "Measure around the fullest part of your bust.", range: "30 - 50" },
-            { name: "Waist", unit: "in", required: true, instruction: "Measure around your natural waistline.", range: "24 - 45" },
-            { name: "Shoulder", unit: "in", required: true, instruction: "Measure from shoulder edge to edge.", range: "12 - 20" },
-            { name: "Blouse Length", unit: "in", required: true, instruction: "Measure from shoulder to bottom edge.", range: "14 - 24" },
-        ],
+            { name: "Bust", unit: "in", required: true, instruction: "Measure bust.", range: "30 - 50", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/female+bust.png" },
+            { name: "Under Bust", unit: "in", required: false, instruction: "Measure under bust.", range: "26 - 45", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/female+under+bust.png" },
+            { name: "Waist", unit: "in", required: true, instruction: "Measure waist.", range: "24 - 45", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/femlae+waist%0D%0A%0D%0A.png" },
+            { name: "Shoulder", unit: "in", required: true, instruction: "Measure shoulders.", range: "12 - 20", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/female+shoulder.png" },
+            { name: "Blouse Length", unit: "in", required: true, instruction: "Measure length.", range: "12 - 24", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/female+shirt+length.png" },
+            { name: "Sleeve Length", unit: "in", required: false, instruction: "Measure sleeve.", range: "4 - 24", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/female+sleeves.png" }
+        ]
     },
     {
-        id: "saree-blouse",
-        label: "Saree Blouse",
+        id: "female-pants",
+        label: "Pants",
+        gender: "female",
         defaultFields: [
-            { name: "Bust", unit: "in", required: true, instruction: "Measure around the fullest part of your bust.", range: "30 - 50" },
-            { name: "Under Bust", unit: "in", required: true, instruction: "Measure just below the bust line.", range: "26 - 45" },
-            { name: "Waist", unit: "in", required: true, instruction: "Measure around your natural waistline.", range: "24 - 45" },
-            { name: "Shoulder", unit: "in", required: true, instruction: "Measure shoulder to shoulder.", range: "12 - 20" },
-            { name: "Sleeve Length", unit: "in", required: false, instruction: "Measure from shoulder to desired length.", range: "4 - 24" },
-            { name: "Blouse Length", unit: "in", required: true, instruction: "Measure from shoulder to bottom.", range: "12 - 20" },
-        ],
+            { name: "Waist", unit: "in", required: true, instruction: "Measure waist.", range: "24 - 45", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/femlae+waist%0D%0A%0D%0A.png" },
+            { name: "Hip", unit: "in", required: true, instruction: "Measure hips.", range: "35 - 55", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/female+hips.png" },
+            { name: "Inseam", unit: "in", required: true, instruction: "Measure inseam.", range: "25 - 38", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/female+croch.png" },
+            { name: "Outseam", unit: "in", required: false, instruction: "Measure outseam.", range: "35 - 45", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/customguideimages/female/female+pant+length.png" }
+        ]
     },
-    {
-        id: "pants-trouser",
-        label: "Pants / Trouser",
-        defaultFields: [
-            { name: "Waist", unit: "in", required: true, instruction: "Measure around your natural waistline.", range: "28 - 50" },
-            { name: "Hip", unit: "in", required: true, instruction: "Measure around the widest part of your hips.", range: "35 - 60" },
-            { name: "Thigh", unit: "in", required: false, instruction: "Measure around the fullest part of your thigh, keeping the tape parallel to the ground.", range: "15 - 40" },
-            { name: "Inseam", unit: "in", required: true, instruction: "Measure from crotch to bottom of leg.", range: "25 - 38" },
-            { name: "Bottom Opening", unit: "in", required: false, instruction: "Measure the desired width of the bottom hem or opening of the garment.", range: "5 - 20" },
-        ],
-    },
-    {
-        id: "lehenga-dress",
-        label: "Lehenga / Dress",
-        defaultFields: [
-            { name: "Bust", unit: "in", required: true, instruction: "Measure around the fullest part of your bust.", range: "30 - 50" },
-            { name: "Waist", unit: "in", required: true, instruction: "Measure around your natural waistline.", range: "24 - 45" },
-            { name: "Hip", unit: "in", required: true, instruction: "Measure around the widest part of your hips.", range: "35 - 55" },
-            { name: "Length", unit: "in", required: true, instruction: "Measure from waist to floor.", range: "35 - 50" },
-        ],
-    },
-    {
-        id: "custom",
-        label: "Custom",
-        defaultFields: [
-            { name: "Custom Field 1", unit: "in", required: true, instruction: "Add your custom measurement instructions here.", range: "0 - 100" },
-        ],
-    },
+    { id: "female-custom", label: "Custom", gender: "female", defaultFields: [] }
 ];
+
 
 // Loader
 export const loader = async ({ request }) => {
@@ -97,6 +88,8 @@ export const loader = async ({ request }) => {
         gender: t.gender,
         clothingType: t.clothingType,
         fields: typeof t.fields === "string" ? JSON.parse(t.fields) : t.fields,
+        fitPreferences: t.fitPreferences ? JSON.parse(t.fitPreferences) : null,
+        collarOptions: t.collarOptions ? JSON.parse(t.collarOptions) : null,
         isActive: t.isActive,
         dateCreated: new Date(t.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     }));
@@ -155,11 +148,13 @@ export const action = async ({ request }) => {
         const gender = formData.get("gender") || "Male";
         const clothingType = formData.get("clothingType");
         const fields = formData.get("fields");
+        const fitPreferences = formData.get("fitPreferences");
+        const collarOptions = formData.get("collarOptions");
 
         if (!name || !clothingType || !fields) return { error: "Missing required fields" };
 
         const template = await prisma.tailorTemplate.create({
-            data: { shop, name, gender, clothingType, fields, isActive: true },
+            data: { shop, name, gender, clothingType, fields, fitPreferences, collarOptions, isActive: true },
         });
         return { success: true, template };
     }
@@ -168,10 +163,13 @@ export const action = async ({ request }) => {
         const id = formData.get("id");
         const name = formData.get("name");
         const fields = formData.get("fields");
+        const fitPreferences = formData.get("fitPreferences");
 
         const updateData = {};
         if (name) updateData.name = name;
         if (fields) updateData.fields = fields;
+        if (fitPreferences) updateData.fitPreferences = fitPreferences;
+        if (collarOptions) updateData.collarOptions = collarOptions;
 
         const template = await prisma.tailorTemplate.update({ where: { id }, data: updateData });
         return { success: true, template };
@@ -218,18 +216,35 @@ export default function CustomTailor() {
 
     const [templates, setTemplates] = useState(initialTemplates || []);
     const [selectedPreset, setSelectedPreset] = useState(tailorPresets[0]);
+    const [selectedGender, setSelectedGender] = useState("male");
     const [templateName, setTemplateName] = useState("");
     const [measurementFields, setMeasurementFields] = useState(tailorPresets[0].defaultFields.map((f, i) => ({ id: Date.now() + i, ...f, enabled: true })));
     const [enableFitPreference, setEnableFitPreference] = useState(false);
+    const [fitPreferences, setFitPreferences] = useState([
+        { id: "slim", label: "Slim", allowance: "+0.5 inch", enabled: true },
+        { id: "regular", label: "Regular", allowance: "+2.0 inch", enabled: true },
+        { id: "loose", label: "Loose", allowance: "+4.0 inch", enabled: true }
+    ]);
     const [enableStitchingNotes, setEnableStitchingNotes] = useState(false);
+    const [enableCollarOption, setEnableCollarOption] = useState(false);
+    const [collarOptions, setCollarOptions] = useState([
+        { id: 1, name: "Button Down Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/button+down+color.png", enabled: true },
+        { id: 2, name: "Band Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/band+collar%0D%0A%0D%0A.png", enabled: true },
+        { id: 3, name: "Spread Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/spread+collar.png", enabled: true }
+    ]);
+    const [nameError, setNameError] = useState(false);
+    const [fieldsError, setFieldsError] = useState(false);
+    const [collarErrors, setCollarErrors] = useState({}); // { [id]: { name: bool, image: bool } }
 
     // Modal states
+    const [previewSelectedCollar, setPreviewSelectedCollar] = useState(null);
     const [infoModalField, setInfoModalField] = useState(null);
     const [editModalField, setEditModalField] = useState(null);
     const [assignModalTemplate, setAssignModalTemplate] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [selectedProducts, setSelectedProducts] = useState([]);
     const [initialSelectedProducts, setInitialSelectedProducts] = useState([]);
+    const [uploadCollarIndex, setUploadCollarIndex] = useState(null);
 
     const products = shopifyProducts || [];
 
@@ -268,7 +283,7 @@ export default function CustomTailor() {
     };
 
     const handleAddField = () => {
-        setMeasurementFields([...measurementFields, { id: Date.now(), name: "New Field", unit: "in", required: false, instruction: "", range: "0 - 100", enabled: true }]);
+        setMeasurementFields([{ id: Date.now(), name: "New Field", unit: "in", required: false, instruction: "", range: "0 - 100", image: "", enabled: true }, ...measurementFields]);
     };
 
     const handleRemoveField = (fieldId) => {
@@ -297,15 +312,39 @@ export default function CustomTailor() {
     };
 
     useEffect(() => {
-        if (uploadFetcher.state === "idle" && uploadFetcher.data?.url && editModalField) {
-            setEditModalField(prev => prev ? ({ ...prev, image: uploadFetcher.data.url }) : null);
+        if (uploadFetcher.state === "idle" && uploadFetcher.data?.url) {
+            if (editModalField) {
+                setEditModalField(prev => prev ? ({ ...prev, image: uploadFetcher.data.url }) : null);
+            } else if (uploadCollarIndex !== null) {
+                const newCollars = [...collarOptions];
+                if (newCollars[uploadCollarIndex]) {
+                    newCollars[uploadCollarIndex].image = uploadFetcher.data.url;
+                    setCollarOptions(newCollars);
+                }
+                setUploadCollarIndex(null);
+            }
         }
     }, [uploadFetcher.data, uploadFetcher.state]);
 
     const handleSaveTemplate = () => {
-        if (!templateName.trim()) return;
+        setNameError(false);
+        setFieldsError(false);
+        setCollarErrors({});
+
+        let hasValidationError = false;
+
+        if (!templateName.trim()) {
+            setNameError(true);
+            hasValidationError = true;
+        }
+
         const enabledFields = measurementFields.filter((f) => f.enabled);
-        if (enabledFields.length === 0) return;
+        if (enabledFields.length === 0) {
+            setFieldsError(true);
+            hasValidationError = true;
+        }
+
+        if (hasValidationError) return;
 
         const formData = new FormData();
         formData.append("intent", "create");
@@ -313,6 +352,13 @@ export default function CustomTailor() {
         formData.append("gender", "Male");
         formData.append("clothingType", selectedPreset.id);
         formData.append("fields", JSON.stringify(enabledFields.map(({ id, enabled, ...rest }) => rest)));
+        if (enableFitPreference) {
+            formData.append("fitPreferences", JSON.stringify(fitPreferences));
+        }
+        if (enableCollarOption) {
+            formData.append("collarOptions", JSON.stringify(collarOptions));
+        }
+
         fetcher.submit(formData, { method: "POST" });
     };
 
@@ -346,10 +392,10 @@ export default function CustomTailor() {
                     </div>
                     <button
                         onClick={handleSaveTemplate}
-                        disabled={!templateName.trim() || enabledFieldsCount === 0 || fetcher.state !== "idle"}
-                        className={`px-4 py-2 text-sm font-medium rounded-md ${!templateName.trim() || enabledFieldsCount === 0 || fetcher.state !== "idle"
+                        disabled={fetcher.state !== "idle"}
+                        className={`px-4 py-2 text-sm font-medium rounded-md ${fetcher.state !== "idle"
                             ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                            : "bg-gray-900 text-white hover:bg-gray-800"
+                            : "bg-gray-900 text-white hover:bg-gray-800 cursor-pointer"
                             }`}
                     >
                         {fetcher.state !== "idle" ? "Creating..." : "Create Template"}
@@ -362,27 +408,57 @@ export default function CustomTailor() {
                         type="text"
                         placeholder="New Measurement Template"
                         value={templateName}
-                        onChange={(e) => setTemplateName(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                        onChange={(e) => {
+                            setTemplateName(e.target.value);
+                            if (e.target.value.trim()) setNameError(false);
+                        }}
+                        className={`w-full px-4 py-3 bg-gray-100 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white ${nameError ? "border-red-500 ring-red-500 bg-red-50" : "border-gray-200"}`}
                     />
+                    {nameError && <p className="mt-1 text-xs text-red-500">Template name is required</p>}
                 </div>
 
                 {/* Tailor Presets */}
                 <div className="mb-6">
                     <h2 className="text-sm font-semibold text-gray-900 mb-3">Tailor Presets</h2>
-                    <div className="flex flex-wrap gap-2">
-                        {tailorPresets.map((preset) => (
-                            <button
-                                key={preset.id}
-                                onClick={() => handlePresetChange(preset)}
-                                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${selectedPreset.id === preset.id
-                                    ? "bg-gray-900 text-white"
-                                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-                                    }`}
-                            >
-                                {preset.label}
-                            </button>
-                        ))}
+                    <div className="flex items-center gap-4">
+                        {/* Gender Tabs */}
+                        <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+                            {["male", "female"].map((gender) => (
+                                <button
+                                    key={gender}
+                                    onClick={() => {
+                                        setSelectedGender(gender);
+                                        // Auto-select first preset of the new gender
+                                        const firstPreset = tailorPresets.find(p => p.gender === gender);
+                                        if (firstPreset) {
+                                            handlePresetChange(firstPreset);
+                                        }
+                                    }}
+                                    className={`px-4 py-2 text-xs font-medium uppercase tracking-wide transition-colors cursor-pointer ${selectedGender === gender
+                                        ? "bg-gray-900 text-white"
+                                        : "bg-white text-gray-600 hover:bg-gray-50"
+                                        }`}
+                                >
+                                    {gender}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Presets for selected gender */}
+                        <div className="flex flex-wrap gap-2">
+                            {tailorPresets.filter(p => p.gender === selectedGender).map((preset) => (
+                                <button
+                                    key={preset.id}
+                                    onClick={() => handlePresetChange(preset)}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all cursor-pointer ${selectedPreset.id === preset.id
+                                        ? "bg-gray-900 text-white"
+                                        : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                                        }`}
+                                >
+                                    {preset.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
@@ -395,7 +471,7 @@ export default function CustomTailor() {
                                 <h3 className="text-base font-semibold text-gray-900">Measurement Fields</h3>
                                 <button
                                     onClick={handleAddField}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 cursor-pointer"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -403,6 +479,13 @@ export default function CustomTailor() {
                                     Add Field
                                 </button>
                             </div>
+
+                            {/* Fields Error Message */}
+                            {fieldsError && (
+                                <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                                    <p className="text-sm text-red-600">Please enable at least one measurement field to create a template.</p>
+                                </div>
+                            )}
 
                             {/* Fields List */}
                             <div className="divide-y divide-gray-100">
@@ -427,6 +510,14 @@ export default function CustomTailor() {
                                                 </div>
                                                 <p className="text-sm text-gray-500 mb-1 line-clamp-2">{field.instruction}</p>
                                                 <p className="text-xs text-gray-400">Range: {field.range} {field.unit}</p>
+                                                {!field.image && (
+                                                    <div className="flex items-start gap-1.5 mt-2 text-amber-600">
+                                                        <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                        </svg>
+                                                        <span className="text-xs">Please upload a guide image so customers can clearly understand how to measure this body part.</span>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Actions */}
@@ -434,7 +525,7 @@ export default function CustomTailor() {
                                                 {/* Enable/Disable - Eye icon */}
                                                 <button
                                                     onClick={() => handleToggleField(field.id)}
-                                                    className={`p-1.5 rounded-full ${field.enabled ? "text-green-500 hover:bg-green-50" : "text-gray-400 hover:bg-gray-100"}`}
+                                                    className={`p-1.5 rounded-full cursor-pointer ${field.enabled ? "text-green-500 hover:bg-green-50" : "text-gray-400 hover:bg-gray-100"}`}
                                                     title={field.enabled ? "Disable field" : "Enable field"}
                                                 >
                                                     {field.enabled ? (
@@ -452,7 +543,7 @@ export default function CustomTailor() {
                                                 <button
                                                     onClick={() => setInfoModalField(field)}
                                                     disabled={!field.enabled}
-                                                    className={`p-1.5 rounded-full ${!field.enabled ? "text-gray-300 cursor-not-allowed" : "text-blue-500 hover:bg-blue-50"}`}
+                                                    className={`p-1.5 rounded-full ${!field.enabled ? "text-gray-300 cursor-not-allowed" : "text-blue-500 hover:bg-blue-50 cursor-pointer"}`}
                                                     title="View info"
                                                 >
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -463,7 +554,7 @@ export default function CustomTailor() {
                                                 <button
                                                     onClick={() => setEditModalField({ ...field })}
                                                     disabled={!field.enabled}
-                                                    className={`p-1.5 rounded-full ${!field.enabled ? "text-gray-300 cursor-not-allowed" : "text-amber-500 hover:bg-amber-50"}`}
+                                                    className={`p-1.5 rounded-full ${!field.enabled ? "text-gray-300 cursor-not-allowed" : "text-amber-500 hover:bg-amber-50 cursor-pointer"}`}
                                                     title="Edit field"
                                                 >
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -474,7 +565,7 @@ export default function CustomTailor() {
                                                 <button
                                                     onClick={() => handleToggleRequired(field.id)}
                                                     disabled={!field.enabled}
-                                                    className={`p-1.5 rounded-full ${!field.enabled ? "text-gray-300 cursor-not-allowed" : field.required ? "text-red-500 hover:bg-red-50" : "text-gray-400 hover:bg-gray-100"}`}
+                                                    className={`p-1.5 rounded-full ${!field.enabled ? "text-gray-300 cursor-not-allowed" : field.required ? "text-red-500 hover:bg-red-50 cursor-pointer" : "text-gray-400 hover:bg-gray-100 cursor-pointer"}`}
                                                     title={field.required ? "Mark as optional" : "Mark as required"}
                                                 >
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -485,7 +576,7 @@ export default function CustomTailor() {
                                                 <button
                                                     onClick={() => handleRemoveField(field.id)}
                                                     disabled={!field.enabled}
-                                                    className={`p-1.5 rounded-full ${!field.enabled ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-red-500 hover:bg-red-50"}`}
+                                                    className={`p-1.5 rounded-full ${!field.enabled ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-red-500 hover:bg-red-50 cursor-pointer"}`}
                                                     title="Delete field"
                                                 >
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -510,6 +601,50 @@ export default function CustomTailor() {
                                     <input type="checkbox" checked={enableFitPreference} onChange={() => setEnableFitPreference(!enableFitPreference)} className="sr-only" />
                                     <span className="text-sm text-gray-700">Enable Fit Preference</span>
                                 </label>
+
+                                {enableFitPreference && (
+                                    <div className="pl-8 space-y-3">
+                                        {fitPreferences.map((fit, index) => (
+                                            <div key={fit.id} className="flex items-center gap-3">
+                                                <input
+                                                    type="text"
+                                                    value={fit.label}
+                                                    onChange={(e) => {
+                                                        const newFits = [...fitPreferences];
+                                                        newFits[index].label = e.target.value;
+                                                        setFitPreferences(newFits);
+                                                    }}
+                                                    className="w-1/3 px-2 py-1.5 text-sm border border-gray-300 rounded focus:border-blue-500 focus:outline-none"
+                                                    placeholder="Label (e.g., Slim)"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={fit.allowance}
+                                                    onChange={(e) => {
+                                                        const newFits = [...fitPreferences];
+                                                        newFits[index].allowance = e.target.value;
+                                                        setFitPreferences(newFits);
+                                                    }}
+                                                    className="w-1/3 px-2 py-1.5 text-sm border border-gray-300 rounded focus:border-blue-500 focus:outline-none"
+                                                    placeholder="Allowance (e.g., +0.5 inch)"
+                                                />
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={fit.enabled}
+                                                        onChange={(e) => {
+                                                            const newFits = [...fitPreferences];
+                                                            newFits[index].enabled = e.target.checked;
+                                                            setFitPreferences(newFits);
+                                                        }}
+                                                        className="rounded text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    <span className="text-xs text-gray-600">Visible</span>
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                                 <label className="flex items-center gap-3 cursor-pointer">
                                     <div className={`relative w-10 h-5 rounded-full transition-colors ${enableStitchingNotes ? "bg-blue-600" : "bg-gray-200"}`}>
                                         <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${enableStitchingNotes ? "translate-x-5" : ""} `} />
@@ -517,6 +652,105 @@ export default function CustomTailor() {
                                     <input type="checkbox" checked={enableStitchingNotes} onChange={() => setEnableStitchingNotes(!enableStitchingNotes)} className="sr-only" />
                                     <span className="text-sm text-gray-700">Enable Stitching Notes</span>
                                 </label>
+
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <div className={`relative w-10 h-5 rounded-full transition-colors ${enableCollarOption ? "bg-blue-600" : "bg-gray-200"}`}>
+                                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${enableCollarOption ? "translate-x-5" : ""} `} />
+                                    </div>
+                                    <input type="checkbox" checked={enableCollarOption} onChange={() => setEnableCollarOption(!enableCollarOption)} className="sr-only" />
+                                    <span className="text-sm text-gray-700">Enable Collar Option</span>
+                                </label>
+
+                                {enableCollarOption && (
+                                    <div className="pl-8 space-y-3">
+                                        {collarOptions.filter(c => c.enabled).map((collar, index) => (
+                                            <div key={collar.id} className="flex items-start gap-4 p-3 border border-gray-100 rounded-lg bg-gray-50/50 hover:border-gray-200 transition-colors group">
+                                                {/* Image Upload Box */}
+                                                <div className="relative flex-shrink-0">
+                                                    <div className="w-24 h-24 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-white hover:border-blue-500 transition-colors cursor-pointer">
+                                                        {collar.image ? (
+                                                            <img src={collar.image} alt={collar.name} className="w-full h-full object-contain p-1" />
+                                                        ) : (
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                                </svg>
+                                                                <span className="text-[10px] text-gray-400">Upload</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <input
+                                                        type="file"
+                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                        accept="image/*"
+                                                        onChange={(e) => {
+                                                            const file = e.target.files?.[0];
+                                                            if (file) {
+                                                                const formData = new FormData();
+                                                                formData.append("file", file);
+                                                                setUploadCollarIndex(index);
+                                                                uploadFetcher.submit(formData, { method: "post", action: "/api/upload", encType: "multipart/form-data" });
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+
+                                                {/* Inputs */}
+                                                <div className="flex-1 space-y-2">
+                                                    <input
+                                                        type="text"
+                                                        value={collar.name}
+                                                        onChange={(e) => {
+                                                            const newCollars = [...collarOptions];
+                                                            newCollars[index].name = e.target.value;
+                                                            setCollarOptions(newCollars);
+                                                            if (collarErrors[collar.id]?.name && e.target.value.trim()) {
+                                                                setCollarErrors(prev => ({ ...prev, [collar.id]: { ...prev[collar.id], name: false } }));
+                                                            }
+                                                        }}
+                                                        className={`w-full px-3 py-1.5 text-sm bg-white border rounded-md focus:outline-none focus:ring-1 ${collarErrors[collar.id]?.name ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:border-blue-500 focus:ring-blue-500"}`}
+                                                        placeholder="Collar Name"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={collar.image}
+                                                        onChange={(e) => {
+                                                            const newCollars = [...collarOptions];
+                                                            newCollars[index].image = e.target.value;
+                                                            setCollarOptions(newCollars);
+                                                            if (collarErrors[collar.id]?.image && e.target.value.trim()) {
+                                                                setCollarErrors(prev => ({ ...prev, [collar.id]: { ...prev[collar.id], image: false } }));
+                                                            }
+                                                        }}
+                                                        placeholder="Paste image URL or upload"
+                                                        className={`w-full px-3 py-1 text-xs bg-white border rounded focus:outline-none focus:ring-1 ${collarErrors[collar.id]?.image ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:border-blue-500 focus:ring-blue-500"} text-gray-500`}
+                                                    />
+                                                </div>
+
+                                                {/* Delete Button */}
+                                                <button
+                                                    onClick={() => setCollarOptions(collarOptions.filter(c => c.id !== collar.id))}
+                                                    disabled={collarOptions.length === 1}
+                                                    className={`p-1.5 text-gray-400 hover:text-red-500 transition-colors ${collarOptions.length === 1 ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}`}
+                                                    title="Remove Option"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        ))}
+                                        <button
+                                            onClick={() => setCollarOptions([...collarOptions, { id: Date.now(), name: "", image: "", enabled: true }])}
+                                            className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 mt-2 cursor-pointer"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                            </svg>
+                                            Add Option
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -529,7 +763,7 @@ export default function CustomTailor() {
 
                                 <button
                                     onClick={() => setShowPreviewModal(true)}
-                                    className="px-6 py-3 bg-[#1F2937] text-white text-sm font-semibold rounded shadow-sm hover:bg-gray-800 transition-colors w-full"
+                                    className="px-6 py-3 bg-[#1F2937] text-white text-sm font-semibold rounded shadow-sm hover:bg-gray-800 transition-colors w-full cursor-pointer"
                                 >
                                     Custom order
                                 </button>
@@ -552,7 +786,7 @@ export default function CustomTailor() {
                                 <h2 className="text-base font-bold text-gray-900">How to Measure: {infoModalField.name}</h2>
                                 <p className="text-xs text-gray-500">Follow these instructions to get accurate measurements.</p>
                             </div>
-                            <button onClick={() => setInfoModalField(null)} className="p-2 hover:bg-gray-100 rounded-lg">
+                            <button onClick={() => setInfoModalField(null)} className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer">
                                 <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
@@ -608,7 +842,7 @@ export default function CustomTailor() {
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
                         <div className="flex items-center justify-between p-4 border-b border-gray-200">
                             <h2 className="text-lg font-bold text-gray-900">Edit Measurement Field</h2>
-                            <button onClick={() => setEditModalField(null)} className="p-2 hover:bg-gray-100 rounded-lg">
+                            <button onClick={() => setEditModalField(null)} className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer">
                                 <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
@@ -661,23 +895,42 @@ export default function CustomTailor() {
                             </div>
                             {/* Image URL */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Guide Image (URL or Upload)</label>
-                                <div className="flex gap-2 items-center">
-                                    <input
-                                        type="text"
-                                        value={editModalField.image || ""}
-                                        onChange={(e) => setEditModalField({ ...editModalField, image: e.target.value })}
-                                        placeholder="https://example.com/image.png"
-                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                    <label className="cursor-pointer bg-gray-50 hover:bg-gray-100 p-2 rounded-md border border-gray-300 transition-colors" title="Upload Image">
-                                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                                        </svg>
-                                        <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
-                                    </label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Guide Image</label>
+                                <div className="flex gap-4 items-start">
+                                    {/* Image Preview Box */}
+                                    <div className="relative flex-shrink-0">
+                                        <div className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50 hover:border-blue-500 transition-colors relative">
+                                            {editModalField.image ? (
+                                                <img src={editModalField.image} alt="Guide" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-1">
+                                                    <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                    <span className="text-[10px] text-gray-400 font-medium">Upload</span>
+                                                </div>
+                                            )}
+                                            <input
+                                                type="file"
+                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                accept="image/*"
+                                                onChange={handleFileUpload}
+                                            />
+                                        </div>
+                                    </div>
+                                    {/* URL Input */}
+                                    <div className="flex-1 space-y-2">
+                                        <input
+                                            type="text"
+                                            value={editModalField.image || ""}
+                                            onChange={(e) => setEditModalField({ ...editModalField, image: e.target.value })}
+                                            placeholder="Paste image URL or upload"
+                                            className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-1 focus:border-blue-500 focus:ring-blue-500"
+                                        />
+                                        <p className="text-xs text-gray-400">Click the image box to upload or paste a URL</p>
+                                        {uploadFetcher.state !== "idle" && <p className="text-xs text-blue-600 font-medium animate-pulse">Uploading image...</p>}
+                                    </div>
                                 </div>
-                                {uploadFetcher.state !== "idle" && <p className="text-xs text-blue-600 mt-1 font-medium animate-pulse">Uploading image...</p>}
                             </div>
                             {/* Required Toggle */}
                             <label className="flex items-center gap-3 cursor-pointer">
@@ -696,7 +949,7 @@ export default function CustomTailor() {
                         <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-gray-200">
                             <button
                                 onClick={() => setEditModalField(null)}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
                             >
                                 Cancel
                             </button>
@@ -711,7 +964,7 @@ export default function CustomTailor() {
                                     setEditModalField(null);
                                     setEditModalField(null);
                                 }}
-                                className="px-5 py-2 text-sm font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800"
+                                className="px-5 py-2 text-sm font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 cursor-pointer"
                             >
                                 Save Changes
                             </button>
@@ -729,7 +982,7 @@ export default function CustomTailor() {
                                 <h2 className="text-lg font-bold text-gray-900">Assign to Products</h2>
                                 <p className="text-sm text-gray-500">Template: {assignModalTemplate.name}</p>
                             </div>
-                            <button onClick={() => setAssignModalTemplate(null)} className="p-2 hover:bg-gray-100 rounded-lg">
+                            <button onClick={() => setAssignModalTemplate(null)} className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer">
                                 <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
@@ -745,8 +998,8 @@ export default function CustomTailor() {
                             ))}
                         </div>
                         <div className="flex items-center justify-between px-5 py-4 border-t border-gray-200">
-                            <button onClick={() => setAssignModalTemplate(null)} className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
-                            <button onClick={handleAssignProducts} disabled={fetcher.state !== "idle" || (selectedProducts.length === initialSelectedProducts.length && selectedProducts.every((id) => initialSelectedProducts.includes(id)))} className={`px-5 py-2.5 text-sm font-semibold rounded-lg ${fetcher.state !== "idle" || (selectedProducts.length === initialSelectedProducts.length && selectedProducts.every((id) => initialSelectedProducts.includes(id))) ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-gray-900 text-white hover:bg-gray-800"}`}>
+                            <button onClick={() => setAssignModalTemplate(null)} className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer">Cancel</button>
+                            <button onClick={handleAssignProducts} disabled={fetcher.state !== "idle" || (selectedProducts.length === initialSelectedProducts.length && selectedProducts.every((id) => initialSelectedProducts.includes(id)))} className={`px-5 py-2.5 text-sm font-semibold rounded-lg ${fetcher.state !== "idle" || (selectedProducts.length === initialSelectedProducts.length && selectedProducts.every((id) => initialSelectedProducts.includes(id))) ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-gray-900 text-white hover:bg-gray-800 cursor-pointer"}`}>
                                 {fetcher.state !== "idle" ? "Applying..." : "Apply"}
                             </button>
                         </div>
@@ -756,8 +1009,21 @@ export default function CustomTailor() {
 
             {/* Preview Modal - "Enter Your Measurements" */}
             {showPreviewModal && (
-                <div className="fixed inset-0 bg-black/50 z-[400] flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setShowPreviewModal(false); }}>
-                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+                <div
+                    className="fixed inset-0 bg-black/50 z-[400] flex items-center justify-center p-4"
+                    onClick={(e) => {
+                        // Close modal on backdrop click
+                        if (e.target === e.currentTarget) setShowPreviewModal(false);
+                    }}
+                >
+                    <div
+                        className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col"
+                        onClick={() => {
+                            // When clicking strictly inside the main white modal area (not on a specific input/card),
+                            // we want to potentially deselect. However, catching this efficiently is hard with bubbling.
+                            // simpler approach: The content area specific handler is better.
+                        }}
+                    >
                         {/* Header */}
                         <div className="flex items-center justify-between p-5 border-b border-gray-200">
                             <div className="flex items-center gap-3">
@@ -766,7 +1032,7 @@ export default function CustomTailor() {
                                 </svg>
                                 <h2 className="text-lg font-bold text-gray-900">Enter Your Measurements</h2>
                             </div>
-                            <button onClick={() => setShowPreviewModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                            <button onClick={() => setShowPreviewModal(false)} className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer">
                                 <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
@@ -775,40 +1041,132 @@ export default function CustomTailor() {
 
                         {/* Tabs */}
                         <div className="flex border-b border-gray-200 px-5">
-                            <button className="py-3 px-1 text-sm font-medium text-gray-900 border-b-2 border-gray-900 mr-6">Details</button>
-                            <button className="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700">How to Measure</button>
+                            <button className="py-3 px-1 text-sm font-medium text-gray-900 border-b-2 border-gray-900 mr-6 cursor-pointer">Details</button>
+                            <button className="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 cursor-pointer">How to Measure</button>
                         </div>
 
                         {/* Content */}
-                        <div className="flex-1 overflow-auto p-6 space-y-6">
+                        <div
+                            className="flex-1 overflow-auto p-6 space-y-6"
+                            onClick={(e) => {
+                                // Deselect collar when clicking on empty space in the content area
+                                const target = e.target;
+                                const isInteractive = target.closest('input') ||
+                                    target.closest('button') ||
+                                    target.closest('label') ||
+                                    target.closest('textarea') ||
+                                    target.closest('.collar-option-card') ||
+                                    target.closest('.clear-selection-btn');
+                                if (!isInteractive) {
+                                    setPreviewSelectedCollar(null);
+                                }
+                            }}
+                        >
                             {measurementFields.filter(f => f.enabled).map((field) => (
-                                <div key={field.id} className="grid grid-cols-[24px_1fr_1fr] items-center gap-4">
+                                <div key={field.id} className="flex items-center gap-4">
                                     {/* Info Icon */}
-                                    <button
-                                        onClick={() => setInfoModalField(field)}
-                                        className="text-gray-400 hover:text-blue-500 transition-colors"
-                                        title="View Instructions"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    </button>
+                                    <div className="flex items-center gap-2 min-w-[130px]">
+                                        <button
+                                            onClick={() => setInfoModalField(field)}
+                                            className="text-gray-400 hover:text-blue-500 transition-colors cursor-pointer"
+                                            title="View Instructions"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </button>
 
-                                    {/* Label */}
-                                    <label className="text-sm font-medium text-gray-700">
-                                        {field.name} {field.required && <span className="text-red-500">*</span>}
-                                    </label>
-
+                                        {/* Label */}
+                                        <label className="text-sm font-medium text-gray-700 field-label">
+                                            {field.name} {field.required && <span className="text-red-500">*</span>}
+                                        </label>
+                                    </div>
                                     {/* Input */}
                                     <input
                                         type="text"
                                         placeholder={`Enter ${field.name.toLowerCase()}`}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400"
+                                        className=" w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400"
                                     />
                                 </div>
                             ))}
                             {measurementFields.filter(f => f.enabled).length === 0 && (
                                 <p className="text-center text-gray-500 py-8">No measurement fields enabled for this template.</p>
+                            )}
+
+                            {enableFitPreference && (
+                                <div className="border-t border-gray-100 pt-6">
+                                    <h3 className="text-sm font-medium text-gray-900 mb-3">Fit Preference</h3>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {fitPreferences.filter(f => f.enabled).map((fit) => (
+                                            <label key={fit.id} className="cursor-pointer">
+                                                <input type="radio" name="fit_preference" className="peer sr-only" />
+                                                <div className="text-center py-2 px-1 border border-gray-200 rounded-md text-sm text-gray-600 peer-checked:bg-gray-900 peer-checked:text-white peer-checked:border-gray-900 transition-all hover:bg-gray-50 peer-checked:hover:bg-gray-800 flex flex-col items-center justify-center min-h-[60px]">
+                                                    <span className="font-medium">{fit.label}</span>
+                                                    <span className="text-[10px] opacity-70">({fit.allowance})</span>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {enableStitchingNotes && (
+                                <div className="border-t border-gray-100 pt-6">
+                                    <h3 className="text-sm font-medium text-gray-900 mb-3">Stitching Notes</h3>
+                                    <textarea
+                                        placeholder="Add any specific instructions for stitching..."
+                                        rows={3}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400 resize-none"
+                                    />
+                                </div>
+                            )}
+
+                            {enableCollarOption && (
+                                <div className="border-t border-gray-100 pt-6 pb-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className="text-sm font-medium text-gray-900">Collar Option</h3>
+                                        {previewSelectedCollar !== null && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setPreviewSelectedCollar(null)}
+                                                className="text-sm text-red-600 hover:text-red-700 font-medium hover:underline px-2 py-1 cursor-pointer"
+                                            >
+                                                Clear Selection
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {collarOptions.filter(c => c.enabled).map((collar) => (
+                                            <div
+                                                key={collar.id}
+                                                onClick={(e) => {
+                                                    e.stopPropagation(); // Prevent parent click handler from clearing selection
+                                                    if (previewSelectedCollar === collar.id) {
+                                                        setPreviewSelectedCollar(null);
+                                                    } else {
+                                                        setPreviewSelectedCollar(collar.id);
+                                                    }
+                                                }}
+                                                className={`collar-option-card cursor-pointer border rounded-lg p-2 text-center transition-all hover:bg-gray-50 ${previewSelectedCollar === collar.id
+                                                    ? 'border-gray-400 text-gray-700 bg-gray-100'
+                                                    : 'border-gray-200'
+                                                    }`}
+                                            >
+                                                <div className={`w-full h-24 mb-2 bg-white rounded flex items-center justify-center overflow-hidden border ${previewSelectedCollar === collar.id ? 'border-gray-300' : 'border-gray-100'
+                                                    }`}>
+                                                    {collar.image ? (
+                                                        <img src={collar.image} alt={collar.name} className="h-full w-full object-contain p-2" />
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">No Image</span>
+                                                    )}
+                                                </div>
+                                                <span className="text-sm font-medium">{collar.name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+
+                                </div>
                             )}
                         </div>
 
@@ -816,13 +1174,13 @@ export default function CustomTailor() {
                         <div className="p-5 border-t border-gray-200 flex items-center justify-end gap-3">
                             <button
                                 onClick={() => setShowPreviewModal(false)}
-                                className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                                className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={() => setShowPreviewModal(false)}
-                                className="px-5 py-2 text-sm font-semibold text-white bg-[#1F2937] rounded-lg hover:bg-gray-800 shadow-sm"
+                                className="px-5 py-2 text-sm font-semibold text-white bg-[#1F2937] rounded-lg hover:bg-gray-800 shadow-sm cursor-pointer"
                             >
                                 Add to Cart
                             </button>

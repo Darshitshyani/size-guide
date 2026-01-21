@@ -43,6 +43,7 @@ const skitfemale = `${FEMALE_GUIDE_IMAGES_BASE_URL}/skit.png`;
 const suitfemale = `${FEMALE_GUIDE_IMAGES_BASE_URL}/salwarfemale.png`;
 const tshirtfemale = `${FEMALE_GUIDE_IMAGES_BASE_URL}/tshirtfemale.png`;
 
+
 // Male guide images
 const maleGuideImages = {
   pants: `${GUIDE_IMAGES_BASE_URL}/pentsSiz.jpeg`,
@@ -124,6 +125,30 @@ export const loader = async ({ request }) => {
     measureDescription: template.measureDescription,
   }));
 
+  // Fetch TailorTemplates (Custom Templates from Measurement Template Builder)
+  const dbTailorTemplates = await prisma.tailorTemplate.findMany({
+    where: { shop },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Parse JSON fields and format for frontend
+  const customTemplates = dbTailorTemplates.map((template) => ({
+    id: template.id,
+    name: template.name,
+    dateCreated: new Date(template.createdAt).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    }),
+    gender: template.gender,
+    clothingType: template.clothingType,
+    fields: typeof template.fields === "string" ? JSON.parse(template.fields) : template.fields,
+    fitPreferences: template.fitPreferences ? JSON.parse(template.fitPreferences) : null,
+    collarOptions: template.collarOptions ? JSON.parse(template.collarOptions) : null,
+    status: template.isActive ? "Active" : "Inactive",
+    isActive: template.isActive,
+  }));
+
+
   // Fetch products from Shopify
   const response = await admin.graphql(
     `#graphql
@@ -175,7 +200,7 @@ export const loader = async ({ request }) => {
     };
   });
 
-  return { templates, products };
+  return { templates, customTemplates, products };
 };
 
 // Action: Handle create, update, delete operations
@@ -302,13 +327,24 @@ export const action = async ({ request }) => {
     return { success: true, assignedCount: productIds.length, templateId };
   }
 
+  if (intent === "deleteCustomTemplate") {
+    const id = formData.get("id");
+
+    await prisma.tailorTemplate.delete({
+      where: { id },
+    });
+
+    return { success: true, deletedCustomTemplateId: id };
+  }
+
   return { error: "Invalid intent" };
 };
 
 export default function Templates() {
-  const { templates: initialTemplates, products: shopifyProducts } = useLoaderData();
+  const { templates: initialTemplates, customTemplates: initialCustomTemplates, products: shopifyProducts } = useLoaderData();
   const fetcher = useFetcher();
   const [templates, setTemplates] = useState(initialTemplates || []);
+  const [customTemplates, setCustomTemplates] = useState(initialCustomTemplates || []);
   const [activeTab, setActiveTab] = useState("Table Templates");
   const [templateSearch, setTemplateSearch] = useState("");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
@@ -353,6 +389,10 @@ export default function Templates() {
   // Delete confirmation state
   const [deleteConfirmTemplate, setDeleteConfirmTemplate] = useState(null);
 
+  // Custom Template (TailorTemplate) modal states
+  const [viewCustomTemplateModal, setViewCustomTemplateModal] = useState(null);
+  const [deleteCustomTemplateConfirm, setDeleteCustomTemplateConfirm] = useState(null);
+
   // Update templates when fetcher returns data
   useEffect(() => {
     if (fetcher.data?.success && fetcher.data?.template) {
@@ -392,6 +432,10 @@ export default function Templates() {
     } else if (fetcher.data?.success && fetcher.data?.assignedCount !== undefined) {
       // Products assigned - close modal and show success
       handleCloseAssignModal();
+    } else if (fetcher.data?.success && fetcher.data?.deletedCustomTemplateId) {
+      // Custom template deleted - remove from list
+      setCustomTemplates(prev => prev.filter(t => t.id !== fetcher.data.deletedCustomTemplateId));
+      setDeleteCustomTemplateConfirm(null);
     } else if (fetcher.data?.error) {
       setIsSaving(false);
       console.error("Error:", fetcher.data.error);
@@ -401,7 +445,8 @@ export default function Templates() {
   // Sync with loader data when it changes
   useEffect(() => {
     setTemplates(initialTemplates || []);
-  }, [initialTemplates]);
+    setCustomTemplates(initialCustomTemplates || []);
+  }, [initialTemplates, initialCustomTemplates]);
 
   // Use products from Shopify
   const products = shopifyProducts || [];
@@ -854,7 +899,7 @@ export default function Templates() {
   }, [isFiltersOpen]);
 
   const tableTemplatesCount = templates.length;
-  const customTemplatesCount = 2; // Placeholder count
+  const customTemplatesCount = customTemplates.length;
 
   // Filter templates
   const filteredTemplates = templates.filter(template => {
@@ -987,135 +1032,224 @@ export default function Templates() {
           </div>
         </div>
 
-        {/* Templates Table */}
-        <div className="flex-1 overflow-auto bg-white border border-gray-200 rounded-lg shadow-sm">
-          <table className="w-full border-collapse">
-            <thead className="bg-gray-50 sticky top-0 z-10 border-b border-gray-200">
-              <tr>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">NAME</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">DATE CREATED</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">GENDER</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">STATUS</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredTemplates.length === 0 && (
+        {/* Templates Table - Table Templates Tab */}
+        {activeTab === "Table Templates" && (
+          <div className="flex-1 overflow-auto bg-white border border-gray-200 rounded-lg shadow-sm">
+            <table className="w-full border-collapse">
+              <thead className="bg-gray-50 sticky top-0 z-10 border-b border-gray-200">
                 <tr>
-                  <td colSpan="5" className="px-6 py-32 text-center text-gray-500 bg-white">
-                    {templates.length === 0 ? (
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">NAME</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">DATE CREATED</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">GENDER</th>
+                  <th className="px-5 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">STATUS</th>
+                  <th className="px-5 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredTemplates.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-32 text-center text-gray-500 bg-white">
+                      {templates.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                          <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                          </div>
+                          <h3 className="text-lg font-medium text-gray-900 mb-1">Create first template</h3>
+                          <p className="text-sm text-gray-500 mb-6 text-balance">Get started by creating your first size chart template to assign to your products.</p>
+                          <button
+                            onClick={handleOpenCreateModal}
+                            className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors duration-200"
+                          >
+                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Create Table Template
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-4">
+                          <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                          </div>
+                          <h3 className="text-base font-medium text-gray-900 mb-1">No templates found</h3>
+                          <p className="text-sm text-gray-500 mb-4">No templates match your current filters.</p>
+                          <button
+                            onClick={() => { setTemplateSearch(""); setSelectedFilter("All"); }}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                          >
+                            Clear all filters
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                {filteredTemplates.map((template, index) => (
+                  <tr key={template.id} className={`hover:bg-gray-50 transition-colors duration-150 ${index === filteredTemplates.length - 1 ? 'border-b border-gray-200' : ''}`}>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{template.name}</div>
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <div className="text-sm text-gray-600">{template.dateCreated}</div>
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <span className="inline-flex px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full border border-blue-200">
+                        {template.gender}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-2.5">
+                        <div className="relative inline-block w-10 h-5 rounded-full bg-gray-300 transition-colors duration-200">
+                          <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200"></div>
+                        </div>
+
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap text-right">
+                      <div className="flex items-center gap-4 justify-end">
+                        <button
+                          type="button"
+                          onClick={(e) => handleOpenViewModal(template.id, e)}
+                          className="flex cursor-pointer items-center gap-1.5 text-sm font-medium text-blue-600 bg-blue-100 px-3 py-2 rounded-md border border-blue-200 hover:text-blue-700 hover:bg-blue-200 transition-all duration-200"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleEditTemplate(template.id); }}
+                          className="p-2  flex items-center gap-1.5 text-sm  font-medium text-gray-400 text-gray-600 bg-gray-100 rounded-md transition-all duration-200 border  border border-gray-200"
+                          title="Edit"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleOpenAssignModal(template.id, template.name, e)}
+                          className="p-2 flex items-center cursor-pointer text-sm font-medium gap-1 text-gray-400 text-gray-600 bg-gray-100 rounded-md transition-all duration-200 border  border-gray-200"
+                          title="Assign"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                          </svg>
+                          Assign
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirmTemplate(template)}
+                          className="p-2 cursor-pointer text-red-400 text-red-600 bg-red-50 rounded-md transition-all duration-200 border border-red-200"
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Custom Templates Tab */}
+        {activeTab === "Custom Templates" && (
+          <div className="flex-1 overflow-auto bg-white border border-gray-200 rounded-lg shadow-sm">
+            <table className="w-full border-collapse">
+              <thead className="bg-gray-50 sticky top-0 z-10 border-b border-gray-200">
+                <tr>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">NAME</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">DATE CREATED</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">GENDER</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">TYPE</th>
+                  <th className="px-5 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">STATUS</th>
+                  <th className="px-5 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {customTemplates.length === 0 && (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-32 text-center text-gray-500 bg-white">
                       <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
                         <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
                           <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                           </svg>
                         </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-1">Create first template</h3>
-                        <p className="text-sm text-gray-500 mb-6 text-balance">Get started by creating your first size chart template to assign to your products.</p>
-                        <button
-                          onClick={handleOpenCreateModal}
-                          className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors duration-200"
-                        >
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                          </svg>
-                          Create Table Template
-                        </button>
+                        <h3 className="text-lg font-medium text-gray-900 mb-1">No custom templates yet</h3>
+                        <p className="text-sm text-gray-500 mb-6 text-balance">Create custom measurement templates using the Measurement Template Builder in the Custom Tailor section.</p>
                       </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center py-4">
-                        <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-3">
-                          <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
+                    </td>
+                  </tr>
+                )}
+                {customTemplates.map((template, index) => (
+                  <tr key={template.id} className={`hover:bg-gray-50 transition-colors duration-150 ${index === customTemplates.length - 1 ? 'border-b border-gray-200' : ''}`}>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{template.name}</div>
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <div className="text-sm text-gray-600">{template.dateCreated}</div>
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <span className="inline-flex px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full border border-blue-200">
+                        {template.gender}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <span className="inline-flex px-2.5 py-1 text-xs font-medium bg-purple-100 text-purple-700 rounded-full border border-purple-200 capitalize">
+                        {template.clothingType}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-2.5">
+                        <div className={`relative inline-block w-10 h-5 rounded-full transition-colors duration-200 ${template.isActive ? 'bg-green-500' : 'bg-gray-300'}`}>
+                          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${template.isActive ? 'left-5.5' : 'left-0.5'}`}></div>
                         </div>
-                        <h3 className="text-base font-medium text-gray-900 mb-1">No templates found</h3>
-                        <p className="text-sm text-gray-500 mb-4">No templates match your current filters.</p>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 whitespace-nowrap text-right">
+                      <div className="flex items-center gap-4 justify-end">
                         <button
-                          onClick={() => { setTemplateSearch(""); setSelectedFilter("All"); }}
-                          className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                          type="button"
+                          onClick={() => setViewCustomTemplateModal(template)}
+                          className="flex cursor-pointer items-center gap-1.5 text-sm font-medium text-blue-600 bg-blue-100 px-3 py-2 rounded-md border border-blue-200 hover:text-blue-700 hover:bg-blue-200 transition-all duration-200"
                         >
-                          Clear all filters
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteCustomTemplateConfirm(template)}
+                          className="p-2 cursor-pointer text-red-400 text-red-600 bg-red-50 rounded-md transition-all duration-200 border border-red-200"
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
                         </button>
                       </div>
-                    )}
-                  </td>
-                </tr>
-              )}
-              {filteredTemplates.map((template, index) => (
-                <tr key={template.id} className={`hover:bg-gray-50 transition-colors duration-150 ${index === filteredTemplates.length - 1 ? 'border-b border-gray-200' : ''}`}>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{template.name}</div>
-                  </td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <div className="text-sm text-gray-600">{template.dateCreated}</div>
-                  </td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <span className="inline-flex px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full border border-blue-200">
-                      {template.gender}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <div className="flex items-center justify-center gap-2.5">
-                      <div className="relative inline-block w-10 h-5 rounded-full bg-gray-300 transition-colors duration-200">
-                        <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200"></div>
-                      </div>
-
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5 whitespace-nowrap text-right">
-                    <div className="flex items-center gap-4 justify-end">
-                      <button
-                        type="button"
-                        onClick={(e) => handleOpenViewModal(template.id, e)}
-                        className="flex cursor-pointer items-center gap-1.5 text-sm font-medium text-blue-600 bg-blue-100 px-3 py-2 rounded-md border border-blue-200 hover:text-blue-700 hover:bg-blue-200 transition-all duration-200"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        View
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleEditTemplate(template.id); }}
-                        className="p-2  flex items-center gap-1.5 text-sm  font-medium text-gray-400 text-gray-600 bg-gray-100 rounded-md transition-all duration-200 border  border border-gray-200"
-                        title="Edit"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => handleOpenAssignModal(template.id, template.name, e)}
-                        className="p-2 flex items-center cursor-pointer text-sm font-medium gap-1 text-gray-400 text-gray-600 bg-gray-100 rounded-md transition-all duration-200 border  border-gray-200"
-                        title="Assign"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                        </svg>
-                        Assign
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirmTemplate(template)}
-                        className="p-2 cursor-pointer text-red-400 text-red-600 bg-red-50 rounded-md transition-all duration-200 border border-red-200"
-                        title="Delete"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* View Template Modal */}
@@ -2157,6 +2291,155 @@ export default function Templates() {
                 </>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* View Custom Template Modal */}
+      {viewCustomTemplateModal && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setViewCustomTemplateModal(null);
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">{viewCustomTemplateModal.name}</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {viewCustomTemplateModal.gender} • {viewCustomTemplateModal.clothingType}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewCustomTemplateModal(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-auto p-6">
+              {/* Measurement Fields */}
+              <div className="mb-6">
+                <h3 className="text-base font-semibold text-gray-900 mb-3">Measurement Fields</h3>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full border-collapse">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Field Name</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Unit</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Range</th>
+                        <th className="px-4 py-2 text-center text-xs font-semibold text-gray-700">Required</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {viewCustomTemplateModal.fields?.map((field, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900">{field.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{field.unit}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{field.range}</td>
+                          <td className="px-4 py-3 text-center">
+                            {field.required ? (
+                              <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">Yes</span>
+                            ) : (
+                              <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded">No</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Fit Preferences */}
+              {viewCustomTemplateModal.fitPreferences && (
+                <div className="mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-3">Fit Preferences</h3>
+                  <div className="flex flex-wrap gap-3">
+                    {viewCustomTemplateModal.fitPreferences.map((fit, idx) => (
+                      <div key={idx} className="px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="text-sm font-medium text-blue-900">{fit.label}</div>
+                        <div className="text-xs text-blue-600">{fit.allowance}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Collar Options */}
+              {viewCustomTemplateModal.collarOptions && (
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900 mb-3">Collar Options</h3>
+                  <div className="flex flex-wrap gap-3">
+                    {viewCustomTemplateModal.collarOptions.map((collar, idx) => (
+                      <div key={idx} className="flex items-center gap-3 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+                        {collar.image && (
+                          <img src={collar.image} alt={collar.name} className="w-10 h-10 object-cover rounded" />
+                        )}
+                        <span className="text-sm font-medium text-gray-900">{collar.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Custom Template Confirmation Modal */}
+      {deleteCustomTemplateConfirm && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setDeleteCustomTemplateConfirm(null);
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Delete Custom Template</h3>
+                <p className="text-sm text-gray-600">Are you sure you want to delete "{deleteCustomTemplateConfirm.name}"?</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 mb-6">This action cannot be undone.</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setDeleteCustomTemplateConfirm(null)}
+                className="px-4 py-2 cursor-pointer text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const formData = new FormData();
+                  formData.append("intent", "deleteCustomTemplate");
+                  formData.append("id", deleteCustomTemplateConfirm.id);
+                  fetcher.submit(formData, { method: "POST" });
+                }}
+                className="px-4 py-2 cursor-pointer text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
