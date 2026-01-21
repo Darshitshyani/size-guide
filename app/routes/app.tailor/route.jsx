@@ -245,6 +245,12 @@ export default function CustomTailor() {
     const [selectedProducts, setSelectedProducts] = useState([]);
     const [initialSelectedProducts, setInitialSelectedProducts] = useState([]);
     const [uploadCollarIndex, setUploadCollarIndex] = useState(null);
+    const [deleteConfirmField, setDeleteConfirmField] = useState(null); // Field pending deletion confirmation
+    const [initialMeasurementFields, setInitialMeasurementFields] = useState(tailorPresets[0].defaultFields.map((f, i) => ({ id: Date.now() + i, ...f, enabled: true }))); // Track initial state for change detection
+    const [pendingPresetChange, setPendingPresetChange] = useState(null); // Pending preset when discard warning is shown
+    const [showDiscardWarning, setShowDiscardWarning] = useState(false); // Show discard changes warning
+    const [draggedFieldId, setDraggedFieldId] = useState(null); // Track which field is being dragged
+    const [previewActiveTab, setPreviewActiveTab] = useState("details"); // "details" or "howto" for preview modal tabs
 
     const products = shopifyProducts || [];
 
@@ -277,9 +283,52 @@ export default function CustomTailor() {
         }
     }, [fetcher.data]);
 
-    const handlePresetChange = (preset) => {
+    // Check if there are unsaved changes by comparing current fields with initial
+    const hasUnsavedChanges = () => {
+        if (templateName.trim()) return true; // Has template name entered
+        if (measurementFields.length !== initialMeasurementFields.length) return true;
+
+        // Compare field properties (ignore id as it changes)
+        for (let i = 0; i < measurementFields.length; i++) {
+            const current = measurementFields[i];
+            const initial = initialMeasurementFields[i];
+            if (!initial) return true;
+            if (current.name !== initial.name ||
+                current.unit !== initial.unit ||
+                current.required !== initial.required ||
+                current.instruction !== initial.instruction ||
+                current.range !== initial.range ||
+                current.image !== initial.image ||
+                current.enabled !== initial.enabled) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    const handlePresetChange = (preset, forceChange = false) => {
+        // If forcing change (from discard modal), just apply the change
+        if (forceChange) {
+            const newFields = preset.defaultFields.map((f, i) => ({ id: Date.now() + i, ...f, enabled: true }));
+            setSelectedPreset(preset);
+            setMeasurementFields(newFields);
+            setInitialMeasurementFields(newFields);
+            setTemplateName("");
+            return;
+        }
+
+        // Check for unsaved changes
+        if (hasUnsavedChanges()) {
+            setPendingPresetChange(preset);
+            setShowDiscardWarning(true);
+            return;
+        }
+
+        // No changes, proceed with preset change
+        const newFields = preset.defaultFields.map((f, i) => ({ id: Date.now() + i, ...f, enabled: true }));
         setSelectedPreset(preset);
-        setMeasurementFields(preset.defaultFields.map((f, i) => ({ id: Date.now() + i, ...f, enabled: true })));
+        setMeasurementFields(newFields);
+        setInitialMeasurementFields(newFields);
     };
 
     const handleAddField = () => {
@@ -300,6 +349,33 @@ export default function CustomTailor() {
 
     const handleUpdateField = (id, key, value) => {
         setMeasurementFields(prev => prev.map(field => field.id === id ? { ...field, [key]: value } : field));
+    };
+
+    // Drag and drop handlers
+    const handleDragStart = (e, fieldId) => {
+        setDraggedFieldId(fieldId);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', fieldId);
+    };
+
+    const handleDragOver = (e, fieldId) => {
+        e.preventDefault();
+        if (draggedFieldId === fieldId) return;
+
+        const draggedIndex = measurementFields.findIndex(f => f.id === draggedFieldId);
+        const targetIndex = measurementFields.findIndex(f => f.id === fieldId);
+
+        if (draggedIndex === -1 || targetIndex === -1) return;
+
+        // Reorder the fields
+        const newFields = [...measurementFields];
+        const [draggedField] = newFields.splice(draggedIndex, 1);
+        newFields.splice(targetIndex, 0, draggedField);
+        setMeasurementFields(newFields);
+    };
+
+    const handleDragEnd = () => {
+        setDraggedFieldId(null);
     };
 
     const handleFileUpload = (event) => {
@@ -490,10 +566,17 @@ export default function CustomTailor() {
                             {/* Fields List */}
                             <div className="divide-y divide-gray-100">
                                 {measurementFields.map((field) => (
-                                    <div key={field.id} className={`px-5 py-4 ${!field.enabled ? "opacity-50" : ""}`}>
+                                    <div
+                                        key={field.id}
+                                        className={`px-5 py-4 ${!field.enabled ? "opacity-50" : ""} ${draggedFieldId === field.id ? "bg-blue-50 opacity-70" : ""}`}
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, field.id)}
+                                        onDragOver={(e) => handleDragOver(e, field.id)}
+                                        onDragEnd={handleDragEnd}
+                                    >
                                         <div className="flex items-start gap-3">
                                             {/* Drag Handle */}
-                                            <div className="mt-1 text-gray-400 cursor-move">
+                                            <div className="mt-1 text-gray-400 cursor-grab active:cursor-grabbing">
                                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                                     <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
                                                 </svg>
@@ -574,7 +657,7 @@ export default function CustomTailor() {
                                                 </button>
                                                 {/* Delete - Trash icon */}
                                                 <button
-                                                    onClick={() => handleRemoveField(field.id)}
+                                                    onClick={() => setDeleteConfirmField(field)}
                                                     disabled={!field.enabled}
                                                     className={`p-1.5 rounded-full ${!field.enabled ? "text-gray-300 cursor-not-allowed" : "text-gray-400 hover:text-red-500 hover:bg-red-50 cursor-pointer"}`}
                                                     title="Delete field"
@@ -792,9 +875,9 @@ export default function CustomTailor() {
                                 </svg>
                             </button>
                         </div>
-                        <div className="p-5">
+                        <div className="p-5 flex flex-col items-center justify-center">
                             {infoModalField.image ? (
-                                <div className="w-full h-40 bg-gray-50 rounded-lg mb-6 overflow-hidden border border-gray-100">
+                                <div className="w-[250px] h-[250px] bg-gray-50 rounded-lg mb-6 overflow-hidden border border-gray-100">
                                     <img src={infoModalField.image} alt={infoModalField.name} className="w-full h-full object-contain" />
                                 </div>
                             ) : (
@@ -805,7 +888,7 @@ export default function CustomTailor() {
                                     <span className="text-sm text-gray-400">No guide image available</span>
                                 </div>
                             )}
-                            <div className="mb-6">
+                            <div className="mb-6 w-full">
                                 <div className="flex items-center gap-2 mb-2">
                                     <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -814,7 +897,7 @@ export default function CustomTailor() {
                                 </div>
                                 <p className="text-sm text-gray-600 leading-relaxed">{infoModalField.instruction || "No instructions provided."}</p>
                             </div>
-                            <div>
+                            <div className="w-full">
                                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Measurement Details</h3>
                                 <div className="space-y-2">
                                     <div className="flex justify-between py-2 border-b border-gray-100">
@@ -1041,13 +1124,29 @@ export default function CustomTailor() {
 
                         {/* Tabs */}
                         <div className="flex border-b border-gray-200 px-5">
-                            <button className="py-3 px-1 text-sm font-medium text-gray-900 border-b-2 border-gray-900 mr-6 cursor-pointer">Details</button>
-                            <button className="py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 cursor-pointer">How to Measure</button>
+                            <button
+                                onClick={() => setPreviewActiveTab("details")}
+                                className={`py-3 px-1 text-sm font-medium mr-6 cursor-pointer border-b-2 transition-colors ${previewActiveTab === "details"
+                                    ? "text-gray-900 border-gray-900"
+                                    : "text-gray-500 border-transparent hover:text-gray-700"
+                                    }`}
+                            >
+                                Details
+                            </button>
+                            <button
+                                onClick={() => setPreviewActiveTab("howto")}
+                                className={`py-3 px-1 text-sm font-medium cursor-pointer border-b-2 transition-colors ${previewActiveTab === "howto"
+                                    ? "text-gray-900 border-gray-900"
+                                    : "text-gray-500 border-transparent hover:text-gray-700"
+                                    }`}
+                            >
+                                How to Measure
+                            </button>
                         </div>
 
                         {/* Content */}
                         <div
-                            className="flex-1 overflow-auto p-6 space-y-6"
+                            className="flex-1 overflow-auto p-6 space-y-4"
                             onClick={(e) => {
                                 // Deselect collar when clicking on empty space in the content area
                                 const target = e.target;
@@ -1062,110 +1161,154 @@ export default function CustomTailor() {
                                 }
                             }}
                         >
-                            {measurementFields.filter(f => f.enabled).map((field) => (
-                                <div key={field.id} className="flex items-center gap-4">
-                                    {/* Info Icon */}
-                                    <div className="flex items-center gap-2 min-w-[130px]">
-                                        <button
-                                            onClick={() => setInfoModalField(field)}
-                                            className="text-gray-400 hover:text-blue-500 transition-colors cursor-pointer"
-                                            title="View Instructions"
-                                        >
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                            </svg>
-                                        </button>
+                            {/* Details Tab Content */}
+                            {previewActiveTab === "details" && (
+                                <>
+                                    {measurementFields.filter(f => f.enabled).map((field) => (
+                                        <div key={field.id} className="flex items-center gap-4">
+                                            {/* Info Icon */}
+                                            <div className="flex items-center gap-2 min-w-[130px]">
+                                                <button
+                                                    onClick={() => setInfoModalField(field)}
+                                                    className="text-gray-400 hover:text-blue-500 transition-colors cursor-pointer"
+                                                    title="View Instructions"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                </button>
 
-                                        {/* Label */}
-                                        <label className="text-sm font-medium text-gray-700 field-label">
-                                            {field.name} {field.required && <span className="text-red-500">*</span>}
-                                        </label>
-                                    </div>
-                                    {/* Input */}
-                                    <input
-                                        type="text"
-                                        placeholder={`Enter ${field.name.toLowerCase()}`}
-                                        className=" w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400"
-                                    />
-                                </div>
-                            ))}
-                            {measurementFields.filter(f => f.enabled).length === 0 && (
-                                <p className="text-center text-gray-500 py-8">No measurement fields enabled for this template.</p>
-                            )}
-
-                            {enableFitPreference && (
-                                <div className="border-t border-gray-100 pt-6">
-                                    <h3 className="text-sm font-medium text-gray-900 mb-3">Fit Preference</h3>
-                                    <div className="grid grid-cols-3 gap-3">
-                                        {fitPreferences.filter(f => f.enabled).map((fit) => (
-                                            <label key={fit.id} className="cursor-pointer">
-                                                <input type="radio" name="fit_preference" className="peer sr-only" />
-                                                <div className="text-center py-2 px-1 border border-gray-200 rounded-md text-sm text-gray-600 peer-checked:bg-gray-900 peer-checked:text-white peer-checked:border-gray-900 transition-all hover:bg-gray-50 peer-checked:hover:bg-gray-800 flex flex-col items-center justify-center min-h-[60px]">
-                                                    <span className="font-medium">{fit.label}</span>
-                                                    <span className="text-[10px] opacity-70">({fit.allowance})</span>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {enableStitchingNotes && (
-                                <div className="border-t border-gray-100 pt-6">
-                                    <h3 className="text-sm font-medium text-gray-900 mb-3">Stitching Notes</h3>
-                                    <textarea
-                                        placeholder="Add any specific instructions for stitching..."
-                                        rows={3}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400 resize-none"
-                                    />
-                                </div>
-                            )}
-
-                            {enableCollarOption && (
-                                <div className="border-t border-gray-100 pt-6 pb-4">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <h3 className="text-sm font-medium text-gray-900">Collar Option</h3>
-                                        {previewSelectedCollar !== null && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setPreviewSelectedCollar(null)}
-                                                className="text-sm text-red-600 hover:text-red-700 font-medium hover:underline px-2 py-1 cursor-pointer"
-                                            >
-                                                Clear Selection
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-3">
-                                        {collarOptions.filter(c => c.enabled).map((collar) => (
-                                            <div
-                                                key={collar.id}
-                                                onClick={(e) => {
-                                                    e.stopPropagation(); // Prevent parent click handler from clearing selection
-                                                    if (previewSelectedCollar === collar.id) {
-                                                        setPreviewSelectedCollar(null);
-                                                    } else {
-                                                        setPreviewSelectedCollar(collar.id);
-                                                    }
-                                                }}
-                                                className={`collar-option-card cursor-pointer border rounded-lg p-2 text-center transition-all hover:bg-gray-50 ${previewSelectedCollar === collar.id
-                                                    ? 'border-gray-400 text-gray-700 bg-gray-100'
-                                                    : 'border-gray-200'
-                                                    }`}
-                                            >
-                                                <div className={`w-full h-24 mb-2 bg-white rounded flex items-center justify-center overflow-hidden border ${previewSelectedCollar === collar.id ? 'border-gray-300' : 'border-gray-100'
-                                                    }`}>
-                                                    {collar.image ? (
-                                                        <img src={collar.image} alt={collar.name} className="h-full w-full object-contain p-2" />
-                                                    ) : (
-                                                        <span className="text-xs text-gray-400">No Image</span>
-                                                    )}
-                                                </div>
-                                                <span className="text-sm font-medium">{collar.name}</span>
+                                                {/* Label */}
+                                                <label className="text-sm font-medium text-gray-700 field-label">
+                                                    {field.name} {field.required && <span className="text-red-500">*</span>}
+                                                </label>
                                             </div>
-                                        ))}
-                                    </div>
+                                            {/* Input */}
+                                            <input
+                                                type="text"
+                                                placeholder={`Enter ${field.name.toLowerCase()}`}
+                                                className=" w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400"
+                                            />
+                                        </div>
+                                    ))}
+                                    {measurementFields.filter(f => f.enabled).length === 0 && (
+                                        <p className="text-center text-gray-500 py-8">No measurement fields enabled for this template.</p>
+                                    )}
 
+                                    {enableFitPreference && (
+                                        <div className="border-t border-gray-100 pt-6">
+                                            <h3 className="text-sm font-medium text-gray-900 mb-3">Fit Preference</h3>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                {fitPreferences.filter(f => f.enabled).map((fit) => (
+                                                    <label key={fit.id} className="cursor-pointer">
+                                                        <input type="radio" name="fit_preference" className="peer sr-only" />
+                                                        <div className="text-center py-2 px-1 border border-gray-200 rounded-md text-sm text-gray-600 peer-checked:bg-gray-900 peer-checked:text-white peer-checked:border-gray-900 transition-all hover:bg-gray-50 peer-checked:hover:bg-gray-800 flex flex-col items-center justify-center min-h-[60px]">
+                                                            <span className="font-medium">{fit.label}</span>
+                                                            <span className="text-[10px] opacity-70">({fit.allowance})</span>
+                                                        </div>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
+                                    {enableStitchingNotes && (
+                                        <div className="border-t border-gray-100 pt-6">
+                                            <h3 className="text-sm font-medium text-gray-900 mb-3">Stitching Notes</h3>
+                                            <textarea
+                                                placeholder="Add any specific instructions for stitching..."
+                                                rows={3}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400 resize-none"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {enableCollarOption && (
+                                        <div className="border-t border-gray-100 pt-6 pb-4">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <h3 className="text-sm font-medium text-gray-900">Collar Option</h3>
+                                                {previewSelectedCollar !== null && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPreviewSelectedCollar(null)}
+                                                        className="text-sm text-red-600 hover:text-red-700 font-medium hover:underline px-2 py-1 cursor-pointer"
+                                                    >
+                                                        Clear Selection
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                {collarOptions.filter(c => c.enabled).map((collar) => (
+                                                    <div
+                                                        key={collar.id}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation(); // Prevent parent click handler from clearing selection
+                                                            if (previewSelectedCollar === collar.id) {
+                                                                setPreviewSelectedCollar(null);
+                                                            } else {
+                                                                setPreviewSelectedCollar(collar.id);
+                                                            }
+                                                        }}
+                                                        className={`collar-option-card cursor-pointer border rounded-lg p-2 text-center transition-all hover:bg-gray-50 ${previewSelectedCollar === collar.id
+                                                            ? 'border-gray-400 text-gray-700 bg-gray-100'
+                                                            : 'border-gray-200'
+                                                            }`}
+                                                    >
+                                                        <div className={`w-full h-24 mb-2 bg-white rounded flex items-center justify-center overflow-hidden border ${previewSelectedCollar === collar.id ? 'border-gray-300' : 'border-gray-100'
+                                                            }`}>
+                                                            {collar.image ? (
+                                                                <img src={collar.image} alt={collar.name} className="h-full w-full object-contain p-2" />
+                                                            ) : (
+                                                                <span className="text-xs text-gray-400">No Image</span>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-sm font-medium">{collar.name}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* How to Measure Tab Content */}
+                            {previewActiveTab === "howto" && (
+                                <div className="space-y-4">
+                                    {measurementFields.filter(f => f.enabled).map((field) => (
+                                        <div
+                                            key={field.id}
+                                            className="bg-white border border-gray-200 rounded-lg p-4 relative"
+                                        >
+                                            {/* Info button */}
+                                            <button
+                                                onClick={() => setInfoModalField(field)}
+                                                className="absolute top-4 right-4 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-blue-500 border border-gray-200 rounded-full cursor-pointer transition-colors"
+                                                title="View detailed instructions"
+                                            >
+                                                <span className="text-xs font-medium">i</span>
+                                            </button>
+
+                                            {/* Field name */}
+                                            <h4 className="text-base font-medium text-gray-900 mb-2 pr-8">
+                                                {field.name} {field.required && <span className="text-red-500">*</span>}
+                                            </h4>
+
+                                            {/* Instruction */}
+                                            <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                                                {field.instruction || "No instructions provided."}
+                                            </p>
+
+                                            {/* Range */}
+                                            <div className="pt-3 border-t border-gray-100">
+                                                <p className="text-sm text-gray-500">
+                                                    Range: {field.range} {field.unit}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {measurementFields.filter(f => f.enabled).length === 0 && (
+                                        <p className="text-center text-gray-500 py-8">No measurement fields enabled for this template.</p>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -1184,6 +1327,82 @@ export default function CustomTailor() {
                             >
                                 Add to Cart
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteConfirmField && (
+                <div className="fixed inset-0 bg-black/50 z-[600] flex items-center justify-center" onClick={(e) => { if (e.target === e.currentTarget) setDeleteConfirmField(null); }}>
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
+                        <div className="p-5">
+                            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+                                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">Delete Field</h3>
+                            <p className="text-sm text-gray-500 text-center mb-6">
+                                Are you sure you want to delete <span className="font-medium text-gray-700">"{deleteConfirmField.name}"</span>? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setDeleteConfirmField(null)}
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        handleRemoveField(deleteConfirmField.id);
+                                        setDeleteConfirmField(null);
+                                    }}
+                                    className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 cursor-pointer"
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Discard Changes Warning Modal */}
+            {showDiscardWarning && pendingPresetChange && (
+                <div className="fixed inset-0 bg-black/50 z-[600] flex items-center justify-center" onClick={(e) => { if (e.target === e.currentTarget) { setShowDiscardWarning(false); setPendingPresetChange(null); } }}>
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
+                        <div className="p-5">
+                            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-amber-100 rounded-full">
+                                <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">Discard Changes?</h3>
+                            <p className="text-sm text-gray-500 text-center mb-6">
+                                You have unsaved changes. Switching to <span className="font-medium text-gray-700">"{pendingPresetChange.label}"</span> will discard your current changes.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowDiscardWarning(false);
+                                        setPendingPresetChange(null);
+                                    }}
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+                                >
+                                    Keep Editing
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        handlePresetChange(pendingPresetChange, true);
+                                        setShowDiscardWarning(false);
+                                        setPendingPresetChange(null);
+                                    }}
+                                    className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 cursor-pointer"
+                                >
+                                    Discard
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
