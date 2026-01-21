@@ -233,6 +233,7 @@ export default function CustomTailor() {
         { id: 3, name: "Spread Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/spread+collar.png", enabled: true }
     ]);
     const [nameError, setNameError] = useState(false);
+    const [duplicateNameError, setDuplicateNameError] = useState(false);
     const [fieldsError, setFieldsError] = useState(false);
     const [collarErrors, setCollarErrors] = useState({}); // { [id]: { name: bool, image: bool } }
 
@@ -404,6 +405,7 @@ export default function CustomTailor() {
 
     const handleSaveTemplate = () => {
         setNameError(false);
+        setDuplicateNameError(false);
         setFieldsError(false);
         setCollarErrors({});
 
@@ -411,6 +413,9 @@ export default function CustomTailor() {
 
         if (!templateName.trim()) {
             setNameError(true);
+            hasValidationError = true;
+        } else if (templates.some(t => t.name.toLowerCase() === templateName.trim().toLowerCase())) {
+            setDuplicateNameError(true);
             hasValidationError = true;
         }
 
@@ -487,10 +492,12 @@ export default function CustomTailor() {
                         onChange={(e) => {
                             setTemplateName(e.target.value);
                             if (e.target.value.trim()) setNameError(false);
+                            setDuplicateNameError(false);
                         }}
-                        className={`w-full px-4 py-3 bg-gray-100 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white ${nameError ? "border-red-500 ring-red-500 bg-red-50" : "border-gray-200"}`}
+                        className={`w-full px-4 py-3 bg-gray-100 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white ${nameError || duplicateNameError ? "border-red-500 ring-red-500 bg-red-50" : "border-gray-200"}`}
                     />
                     {nameError && <p className="mt-1 text-xs text-red-500">Template name is required</p>}
+                    {duplicateNameError && <p className="mt-1 text-xs text-red-500">A template with this name already exists. Please choose a different name.</p>}
                 </div>
 
                 {/* Tailor Presets */}
