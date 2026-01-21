@@ -392,6 +392,8 @@ export default function Templates() {
   // Custom Template (TailorTemplate) modal states
   const [viewCustomTemplateModal, setViewCustomTemplateModal] = useState(null);
   const [deleteCustomTemplateConfirm, setDeleteCustomTemplateConfirm] = useState(null);
+  const [customTemplateViewTab, setCustomTemplateViewTab] = useState("details"); // "details" or "howto"
+  const [customTemplateInfoField, setCustomTemplateInfoField] = useState(null); // Field for info modal in custom template view
 
   // Update templates when fetcher returns data
   useEffect(() => {
@@ -470,11 +472,11 @@ export default function Templates() {
     setViewModalTemplate(null);
   };
 
-  const handleOpenAssignModal = (templateId, templateName, e) => {
+  const handleOpenAssignModal = (templateId, templateName, e, templateType = 'table') => {
     if (e) {
       e.stopPropagation();
     }
-    setAssignModalTemplate({ id: templateId, name: templateName });
+    setAssignModalTemplate({ id: templateId, name: templateName, type: templateType });
     setAssignSearch("");
     // Pre-select products that are already assigned to this template
     const alreadyAssigned = products
@@ -1021,13 +1023,19 @@ export default function Templates() {
             {/* Create Template Button */}
             <button
               type="button"
-              onClick={handleOpenCreateModal}
+              onClick={() => {
+                if (activeTab === "Custom Templates") {
+                  window.location.href = "/app/tailor";
+                } else {
+                  handleOpenCreateModal();
+                }
+              }}
               className="flex w-fit items-center gap-2 px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-md hover:bg-blue-700 active:bg-blue-800 transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer "
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
-              Create Table Template
+              {activeTab === "Custom Templates" ? "Create Custom Tailor Template" : "Create Table Template"}
             </button>
           </div>
         </div>
@@ -1234,8 +1242,30 @@ export default function Templates() {
                         </button>
                         <button
                           type="button"
+                          onClick={(e) => { e.stopPropagation(); window.location.href = `/app/tailor?edit=${template.id}`; }}
+                          className="p-2 flex items-center gap-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-md transition-all duration-200 border border-gray-200 cursor-pointer hover:bg-gray-200"
+                          title="Edit"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleOpenAssignModal(template.id, template.name, e, 'custom')}
+                          className="p-2 flex items-center cursor-pointer text-sm font-medium gap-1 text-gray-600 bg-gray-100 rounded-md transition-all duration-200 border border-gray-200 hover:bg-gray-200"
+                          title="Assign"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                          </svg>
+                          Assign
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setDeleteCustomTemplateConfirm(template)}
-                          className="p-2 cursor-pointer text-red-400 text-red-600 bg-red-50 rounded-md transition-all duration-200 border border-red-200"
+                          className="p-2 cursor-pointer text-red-600 bg-red-50 rounded-md transition-all duration-200 border border-red-200 hover:bg-red-100"
                           title="Delete"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -2295,29 +2325,32 @@ export default function Templates() {
         </div>
       )}
 
-      {/* View Custom Template Modal */}
+      {/* View Custom Template Modal - Customer Preview Style */}
       {viewCustomTemplateModal && (
         <div
           className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setViewCustomTemplateModal(null);
+              setCustomTemplateViewTab("details");
             }
           }}
         >
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">{viewCustomTemplateModal.name}</h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  {viewCustomTemplateModal.gender} • {viewCustomTemplateModal.clothingType}
-                </p>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <svg className="w-6 h-6 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">{viewCustomTemplateModal.name}</h2>
+                  <p className="text-xs text-gray-500">{viewCustomTemplateModal.gender} • {viewCustomTemplateModal.clothingType}</p>
+                </div>
               </div>
               <button
-                type="button"
-                onClick={() => setViewCustomTemplateModal(null)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={() => { setViewCustomTemplateModal(null); setCustomTemplateViewTab("details"); }}
+                className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer"
               >
                 <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2325,72 +2358,231 @@ export default function Templates() {
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="flex-1 overflow-auto p-6">
-              {/* Measurement Fields */}
-              <div className="mb-6">
-                <h3 className="text-base font-semibold text-gray-900 mb-3">Measurement Fields</h3>
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full border-collapse">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Field Name</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Unit</th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700">Range</th>
-                        <th className="px-4 py-2 text-center text-xs font-semibold text-gray-700">Required</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {viewCustomTemplateModal.fields?.map((field, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm text-gray-900">{field.name}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{field.unit}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{field.range}</td>
-                          <td className="px-4 py-3 text-center">
-                            {field.required ? (
-                              <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">Yes</span>
-                            ) : (
-                              <span className="inline-flex px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded">No</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {/* Tabs */}
+            <div className="flex border-b border-gray-200 px-5">
+              <button
+                onClick={() => setCustomTemplateViewTab("details")}
+                className={`py-3 px-1 text-sm font-medium mr-6 cursor-pointer border-b-2 transition-colors ${customTemplateViewTab === "details"
+                  ? "text-gray-900 border-gray-900"
+                  : "text-gray-500 border-transparent hover:text-gray-700"
+                  }`}
+              >
+                Details
+              </button>
+              <button
+                onClick={() => setCustomTemplateViewTab("howto")}
+                className={`py-3 px-1 text-sm font-medium cursor-pointer border-b-2 transition-colors ${customTemplateViewTab === "howto"
+                  ? "text-gray-900 border-gray-900"
+                  : "text-gray-500 border-transparent hover:text-gray-700"
+                  }`}
+              >
+                How to Measure
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto p-6 space-y-4">
+              {/* Details Tab Content */}
+              {customTemplateViewTab === "details" && (
+                <>
+                  {/* Measurement Fields */}
+                  {viewCustomTemplateModal.fields?.filter(f => f.enabled !== false).map((field, idx) => (
+                    <div key={idx} className="flex items-center gap-4">
+                      {/* Info Icon */}
+                      <div className="flex items-center gap-2 min-w-[130px]">
+                        <button
+                          onClick={() => setCustomTemplateInfoField(field)}
+                          className="text-gray-400 hover:text-blue-500 transition-colors cursor-pointer"
+                          title="View Instructions"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+                        {/* Label */}
+                        <label className="text-sm font-medium text-gray-700">
+                          {field.name} {field.required && <span className="text-red-500">*</span>}
+                        </label>
+                      </div>
+                      {/* Input */}
+                      <input
+                        type="text"
+                        placeholder={`Enter ${field.name.toLowerCase()}`}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400"
+                        readOnly
+                      />
+                    </div>
+                  ))}
+                  {(!viewCustomTemplateModal.fields || viewCustomTemplateModal.fields.length === 0) && (
+                    <p className="text-center text-gray-500 py-8">No measurement fields in this template.</p>
+                  )}
+
+                  {/* Fit Preferences */}
+                  {viewCustomTemplateModal.enableFitPreference && viewCustomTemplateModal.fitPreferences && viewCustomTemplateModal.fitPreferences.length > 0 && (
+                    <div className="border-t border-gray-100 pt-6">
+                      <h3 className="text-sm font-medium text-gray-900 mb-3">Fit Preference</h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        {viewCustomTemplateModal.fitPreferences.filter(f => f.enabled !== false).map((fit, idx) => (
+                          <div key={idx} className="text-center py-2 px-1 border border-gray-200 rounded-md text-sm text-gray-600 flex flex-col items-center justify-center min-h-[60px]">
+                            <span className="font-medium">{fit.label}</span>
+                            <span className="text-[10px] opacity-70">({fit.allowance})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stitching Notes */}
+                  {viewCustomTemplateModal.enableStitchingNotes && (
+                    <div className="border-t border-gray-100 pt-6">
+                      <h3 className="text-sm font-medium text-gray-900 mb-3">Stitching Notes</h3>
+                      <textarea
+                        placeholder="Add any specific instructions for stitching..."
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400 resize-none"
+                        readOnly
+                      />
+                    </div>
+                  )}
+
+                  {/* Collar Options */}
+                  {viewCustomTemplateModal.enableCollarOption && viewCustomTemplateModal.collarOptions && viewCustomTemplateModal.collarOptions.length > 0 && (
+                    <div className="border-t border-gray-100 pt-6 pb-4">
+                      <h3 className="text-sm font-medium text-gray-900 mb-3">Collar Option</h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        {viewCustomTemplateModal.collarOptions.filter(c => c.enabled !== false).map((collar, idx) => (
+                          <div
+                            key={idx}
+                            className="cursor-pointer border border-gray-200 rounded-lg p-2 text-center transition-all hover:bg-gray-50"
+                          >
+                            <div className="w-full h-24 mb-2 bg-white rounded flex items-center justify-center overflow-hidden border border-gray-100">
+                              {collar.image ? (
+                                <img src={collar.image} alt={collar.name} className="h-full w-full object-contain p-2" />
+                              ) : (
+                                <span className="text-xs text-gray-400">No Image</span>
+                              )}
+                            </div>
+                            <span className="text-sm font-medium">{collar.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* How to Measure Tab Content */}
+              {customTemplateViewTab === "howto" && (
+                <div className="space-y-4">
+                  {viewCustomTemplateModal.fields?.filter(f => f.enabled !== false).map((field, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-white border border-gray-200 rounded-lg p-4 relative"
+                    >
+                      {/* Info button */}
+                      <button
+                        onClick={() => setCustomTemplateInfoField(field)}
+                        className="absolute top-4 right-4 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-blue-500 border border-gray-200 rounded-full cursor-pointer transition-colors"
+                        title="View detailed instructions"
+                      >
+                        <span className="text-xs font-medium">i</span>
+                      </button>
+
+                      {/* Field name */}
+                      <h4 className="text-base font-medium text-gray-900 mb-2 pr-8">
+                        {field.name} {field.required && <span className="text-red-500">*</span>}
+                      </h4>
+
+                      {/* Instruction */}
+                      <p className="text-sm text-gray-600 mb-3 leading-relaxed">
+                        {field.instruction || "No instructions provided."}
+                      </p>
+
+                      {/* Range */}
+                      <div className="pt-3 border-t border-gray-100">
+                        <p className="text-sm text-gray-500">
+                          Range: {field.range} {field.unit}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {(!viewCustomTemplateModal.fields || viewCustomTemplateModal.fields.length === 0) && (
+                    <p className="text-center text-gray-500 py-8">No measurement fields in this template.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 border-t border-gray-200 flex items-center justify-end gap-3">
+              <button
+                onClick={() => { setViewCustomTemplateModal(null); setCustomTemplateViewTab("details"); }}
+                className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Template Field Info Modal */}
+      {customTemplateInfoField && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center"
+          onClick={(e) => { if (e.target === e.currentTarget) setCustomTemplateInfoField(null); }}
+        >
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-bold text-gray-900">{customTemplateInfoField.name}</h3>
+              <button
+                onClick={() => setCustomTemplateInfoField(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-5 flex flex-col items-center justify-center">
+              {customTemplateInfoField.image ? (
+                <div className="w-[250px] h-[250px] bg-gray-50 rounded-lg mb-6 overflow-hidden border border-gray-100">
+                  <img src={customTemplateInfoField.image} alt={customTemplateInfoField.name} className="w-full h-full object-contain" />
+                </div>
+              ) : (
+                <div className="w-full h-40 bg-gray-50 rounded-lg mb-6 flex items-center justify-center">
+                  <span className="text-sm text-gray-400">No guide image available</span>
+                </div>
+              )}
+              <div className="mb-6 w-full">
+                <div className="flex items-center gap-2 mb-2">
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <h4 className="text-sm font-semibold text-gray-900">Instructions</h4>
+                </div>
+                <p className="text-sm text-gray-600 leading-relaxed">{customTemplateInfoField.instruction || "No instructions provided."}</p>
+              </div>
+              <div className="w-full">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Measurement Details</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-500">Unit</span>
+                    <span className="text-sm font-medium text-gray-900">{customTemplateInfoField.unit}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-500">Range</span>
+                    <span className="text-sm font-medium text-gray-900">{customTemplateInfoField.range} {customTemplateInfoField.unit}</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-sm text-gray-500">Required</span>
+                    <span className={`text-sm font-medium ${customTemplateInfoField.required ? 'text-red-600' : 'text-gray-500'}`}>
+                      {customTemplateInfoField.required ? 'Yes' : 'No'}
+                    </span>
+                  </div>
                 </div>
               </div>
-
-              {/* Fit Preferences */}
-              {viewCustomTemplateModal.fitPreferences && (
-                <div className="mb-6">
-                  <h3 className="text-base font-semibold text-gray-900 mb-3">Fit Preferences</h3>
-                  <div className="flex flex-wrap gap-3">
-                    {viewCustomTemplateModal.fitPreferences.map((fit, idx) => (
-                      <div key={idx} className="px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="text-sm font-medium text-blue-900">{fit.label}</div>
-                        <div className="text-xs text-blue-600">{fit.allowance}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Collar Options */}
-              {viewCustomTemplateModal.collarOptions && (
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900 mb-3">Collar Options</h3>
-                  <div className="flex flex-wrap gap-3">
-                    {viewCustomTemplateModal.collarOptions.map((collar, idx) => (
-                      <div key={idx} className="flex items-center gap-3 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg">
-                        {collar.image && (
-                          <img src={collar.image} alt={collar.name} className="w-10 h-10 object-cover rounded" />
-                        )}
-                        <span className="text-sm font-medium text-gray-900">{collar.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
