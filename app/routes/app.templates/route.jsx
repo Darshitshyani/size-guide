@@ -146,6 +146,7 @@ export const loader = async ({ request }) => {
     collarOptions: template.collarOptions ? JSON.parse(template.collarOptions) : null,
     status: template.isActive ? "Active" : "Inactive",
     isActive: template.isActive,
+    enableStitchingNotes: template.enableStitchingNotes,
   }));
 
 
@@ -516,6 +517,7 @@ export default function Templates() {
         fitPreferences: updated.fitPreferences ? JSON.parse(updated.fitPreferences) : null,
         collarOptions: updated.collarOptions ? JSON.parse(updated.collarOptions) : null,
         isActive: updated.isActive,
+        enableStitchingNotes: updated.enableStitchingNotes,
         dateCreated: new Date(updated.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       };
       setCustomTemplates(prev => prev.map(t => t.id === formattedTemplate.id ? formattedTemplate : t));
@@ -2870,7 +2872,7 @@ export default function Templates() {
                   )}
 
                   {/* Fit Preferences */}
-                  {viewCustomTemplateModal.enableFitPreference && viewCustomTemplateModal.fitPreferences && viewCustomTemplateModal.fitPreferences.length > 0 && (
+                  {viewCustomTemplateModal.fitPreferences && viewCustomTemplateModal.fitPreferences.length > 0 && (
                     <div className="border-t border-gray-100 pt-6">
                       <h3 className="text-sm font-medium text-gray-900 mb-3">Fit Preference</h3>
                       <div className="grid grid-cols-3 gap-3">
@@ -2898,7 +2900,7 @@ export default function Templates() {
                   )}
 
                   {/* Collar Options */}
-                  {viewCustomTemplateModal.enableCollarOption && viewCustomTemplateModal.collarOptions && viewCustomTemplateModal.collarOptions.length > 0 && (
+                  {viewCustomTemplateModal.collarOptions && viewCustomTemplateModal.collarOptions.length > 0 && (
                     <div className="border-t border-gray-100 pt-6 pb-4">
                       <h3 className="text-sm font-medium text-gray-900 mb-3">Collar Option</h3>
                       <div className="grid grid-cols-3 gap-3">
