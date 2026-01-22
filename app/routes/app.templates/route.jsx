@@ -724,13 +724,22 @@ export default function Templates() {
     // Load Collar Options
     if (template.collarOptions && template.collarOptions.length > 0) {
       setEditEnableCollars(true);
-      setEditCustomTemplateCollars(template.collarOptions.map((co, i) => ({ id: Date.now() + i + 200, ...co })));
+      setEditCustomTemplateCollars(template.collarOptions.map((co, i) => {
+        // Auto-fill default images if missing for standard types
+        let defaultImage = co.image;
+        if (!defaultImage) {
+          if (co.name === "Button Down Collar") defaultImage = "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/button+down+color.png";
+          else if (co.name === "Band Collar") defaultImage = "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/band+collar%0D%0A%0D%0A.png";
+          else if (co.name === "Spread Collar") defaultImage = "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/spread+collar.png";
+        }
+        return { id: Date.now() + i + 200, ...co, image: defaultImage };
+      }));
     } else {
       setEditEnableCollars(false);
       setEditCustomTemplateCollars([
-        { id: 1, name: "Button Down Collar", image: "", enabled: true },
-        { id: 2, name: "Band Collar", image: "", enabled: true },
-        { id: 3, name: "Spread Collar", image: "", enabled: true }
+        { id: 1, name: "Button Down Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/button+down+color.png", enabled: true },
+        { id: 2, name: "Band Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/band+collar%0D%0A%0D%0A.png", enabled: true },
+        { id: 3, name: "Spread Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/spread+collar.png", enabled: true }
       ]);
     }
     // Load Stitching Notes
@@ -847,6 +856,29 @@ export default function Templates() {
       return rest;
     }));
 
+    // Process collar option image uploads
+    let processedCollars = editCustomTemplateCollars;
+    if (editEnableCollars) {
+      processedCollars = await Promise.all(editCustomTemplateCollars.map(async (collar) => {
+        if (collar.file) {
+          try {
+            const fd = new FormData();
+            fd.append("file", collar.file);
+            const res = await fetch("/api/upload", { method: "POST", body: fd });
+            const data = await res.json();
+            if (data.url) {
+              const { file, ...rest } = collar;
+              return { ...rest, image: data.url };
+            }
+          } catch (e) {
+            console.error("Collar image upload failed", e);
+          }
+        }
+        const { file, ...rest } = collar;
+        return rest;
+      }));
+    }
+
     const formData = new FormData();
     formData.append("intent", "updateCustomTemplate");
     formData.append("id", editCustomTemplateModal.id);
@@ -860,7 +892,7 @@ export default function Templates() {
 
     // Add Collar Options if enabled
     if (editEnableCollars) {
-      formData.append("collarOptions", JSON.stringify(editCustomTemplateCollars.map(({ id, ...rest }) => rest)));
+      formData.append("collarOptions", JSON.stringify(processedCollars.map(({ id, ...rest }) => rest)));
     }
 
     // Add Stitching Notes toggle
@@ -1936,7 +1968,7 @@ export default function Templates() {
                               <h3 className="text-sm font-medium text-gray-900 mb-1">{product.name}</h3>
                               <div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
                                 <span>ID: {product.productId}</span>
-                                {activeTab === "table" && product.assignedTemplateName && (
+                                {assignModalTemplate?.type === "table" && product.assignedTemplateName && (
                                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${product.assignedTemplateId === assignModalTemplate?.id
                                     ? "bg-green-100 text-green-700 border border-green-200"
                                     : "bg-yellow-100 text-yellow-700 border border-yellow-200"
@@ -1947,7 +1979,7 @@ export default function Templates() {
                                     }
                                   </span>
                                 )}
-                                {activeTab === "custom" && product.assignedCustomTemplateName && (
+                                {assignModalTemplate?.type === "custom" && product.assignedCustomTemplateName && (
                                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${product.assignedCustomTemplateId === assignModalTemplate?.id
                                     ? "bg-green-100 text-green-700 border border-green-200"
                                     : "bg-yellow-100 text-yellow-700 border border-yellow-200"
@@ -3463,14 +3495,38 @@ export default function Templates() {
                     {editCustomTemplateCollars.map((co, i) => (
                       <div key={co.id} className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-lg">
                         {/* Image Preview */}
-                        <div className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50 flex-shrink-0">
-                          {co.image ? (
-                            <img src={co.image} alt={co.name} className="w-full h-full object-contain" />
+                        <div className="group w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 flex items-center justify-center overflow-hidden bg-gray-50 flex-shrink-0 relative cursor-pointer">
+                          {co.image || co.file ? (
+                            <>
+                              <img
+                                src={co.file ? URL.createObjectURL(co.file) : co.image}
+                                alt={co.name}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                <span className="text-[10px] font-bold text-white text-center leading-tight">Change<br />Image</span>
+                              </div>
+                            </>
                           ) : (
-                            <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
+                            <div className="flex flex-col items-center justify-center gap-1">
+                              <svg className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                              </svg>
+                              <span className="text-[9px] uppercase font-bold text-gray-400 group-hover:text-blue-600 transition-colors">Upload</span>
+                            </div>
                           )}
+                          <input
+                            type="file"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            accept="image/*"
+                            title={co.image || co.file ? "Change image" : "Upload image"}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                setEditCustomTemplateCollars(prev => prev.map((c, idx) => idx === i ? { ...c, file } : c));
+                              }
+                            }}
+                          />
                         </div>
                         {/* Inputs */}
                         <div className="flex-1 space-y-2">
@@ -3488,6 +3544,9 @@ export default function Templates() {
                             className="w-full px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
                             placeholder="Image URL"
                           />
+                          <p className="text-[11px] text-gray-400">
+                            Upload image or paste URL
+                          </p>
                         </div>
                         {/* Delete */}
                         <button

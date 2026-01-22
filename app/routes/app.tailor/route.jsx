@@ -160,11 +160,12 @@ export const action = async ({ request }) => {
         const fields = formData.get("fields");
         const fitPreferences = formData.get("fitPreferences");
         const collarOptions = formData.get("collarOptions");
+        const enableStitchingNotes = formData.get("enableStitchingNotes") === "true";
 
         if (!name || !clothingType || !fields) return { error: "Missing required fields" };
 
         const template = await prisma.tailorTemplate.create({
-            data: { shop, name, gender, clothingType, fields, fitPreferences, collarOptions, isActive: true },
+            data: { shop, name, gender, clothingType, fields, fitPreferences, collarOptions, enableStitchingNotes, isActive: true },
         });
         return { success: true, template };
     }
@@ -174,12 +175,15 @@ export const action = async ({ request }) => {
         const name = formData.get("name");
         const fields = formData.get("fields");
         const fitPreferences = formData.get("fitPreferences");
+        const collarOptions = formData.get("collarOptions");
+        const enableStitchingNotes = formData.get("enableStitchingNotes");
 
         const updateData = {};
         if (name) updateData.name = name;
         if (fields) updateData.fields = fields;
         if (fitPreferences) updateData.fitPreferences = fitPreferences;
         if (collarOptions) updateData.collarOptions = collarOptions;
+        if (enableStitchingNotes !== null) updateData.enableStitchingNotes = enableStitchingNotes === "true";
 
         const template = await prisma.tailorTemplate.update({ where: { id }, data: updateData });
         return { success: true, template };
@@ -589,6 +593,7 @@ export default function CustomTailor() {
         if (enableCollarOption) {
             formData.append("collarOptions", JSON.stringify(finalCollarOptions));
         }
+        formData.append("enableStitchingNotes", enableStitchingNotes.toString());
 
         fetcher.submit(formData, { method: "POST" });
     };
