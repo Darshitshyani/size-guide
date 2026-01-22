@@ -254,6 +254,7 @@ export default function CustomTailor() {
     const [showEditDiscardWarning, setShowEditDiscardWarning] = useState(false); // Show discard changes warning for edit modal
     const [draggedFieldId, setDraggedFieldId] = useState(null); // Track which field is being dragged
     const [previewActiveTab, setPreviewActiveTab] = useState("details"); // "details" or "howto" for preview modal tabs
+    const [previewSelectedFit, setPreviewSelectedFit] = useState(null); // Selected fit preference in preview modal
 
     const products = shopifyProducts || [];
 
@@ -277,6 +278,30 @@ export default function CustomTailor() {
                 return [formattedTemplate, ...prev];
             });
             setTemplateName("");
+
+            // Reset fields to default preset values
+            const newFields = selectedPreset.defaultFields.map((f, i) => ({ id: Date.now() + i, ...f, enabled: true }));
+            setMeasurementFields(newFields);
+            setInitialMeasurementFields(newFields);
+
+            // Reset toggles and extended options
+            setEnableFitPreference(false);
+            setEnableStitchingNotes(false);
+            setEnableCollarOption(false);
+
+            // Reset Fit Preferences
+            setFitPreferences([
+                { id: "slim", label: "Slim", allowance: "+0.5 inch", enabled: true },
+                { id: "regular", label: "Regular", allowance: "+2.0 inch", enabled: true },
+                { id: "loose", label: "Loose", allowance: "+4.0 inch", enabled: true }
+            ]);
+
+            // Reset Collar Options
+            setCollarOptions([
+                { id: 1, name: "Button Down Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/button+down+color.png", enabled: true },
+                { id: 2, name: "Band Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/band+collar%0D%0A%0D%0A.png", enabled: true },
+                { id: 3, name: "Spread Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/spread+collar.png", enabled: true }
+            ]);
         } else if (fetcher.data?.success && fetcher.data?.deletedId) {
             setTemplates((prev) => prev.filter((t) => t.id !== fetcher.data.deletedId));
         } else if (fetcher.data?.success && fetcher.data?.assignedCount !== undefined) {
@@ -1283,11 +1308,28 @@ export default function CustomTailor() {
 
                                     {enableFitPreference && (
                                         <div className="border-t border-gray-100 pt-6">
-                                            <h3 className="text-sm font-medium text-gray-900 mb-3">Fit Preference</h3>
+                                            <div className="flex items-center justify-between mb-3">
+                                                <h3 className="text-sm font-medium text-gray-900">Fit Preference</h3>
+                                                {previewSelectedFit !== null && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPreviewSelectedFit(null)}
+                                                        className="text-sm text-red-600 hover:text-red-700 font-medium hover:underline px-2 py-1 cursor-pointer clear-selection-btn"
+                                                    >
+                                                        Clear Selection
+                                                    </button>
+                                                )}
+                                            </div>
                                             <div className="grid grid-cols-3 gap-3">
                                                 {fitPreferences.filter(f => f.enabled).map((fit) => (
-                                                    <label key={fit.id} className="cursor-pointer">
-                                                        <input type="radio" name="fit_preference" className="peer sr-only" />
+                                                    <label key={fit.id} className="cursor-pointer fit-preference-option">
+                                                        <input
+                                                            type="radio"
+                                                            name="fit_preference"
+                                                            className="peer sr-only"
+                                                            checked={previewSelectedFit === fit.id}
+                                                            onChange={() => setPreviewSelectedFit(fit.id)}
+                                                        />
                                                         <div className="text-center py-2 px-1 border border-gray-200 rounded-md text-sm text-gray-600 peer-checked:bg-gray-900 peer-checked:text-white peer-checked:border-gray-900 transition-all hover:bg-gray-50 peer-checked:hover:bg-gray-800 flex flex-col items-center justify-center min-h-[60px]">
                                                             <span className="font-medium">{fit.label}</span>
                                                             <span className="text-[10px] opacity-70">({fit.allowance})</span>
