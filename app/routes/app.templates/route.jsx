@@ -172,8 +172,14 @@ export const loader = async ({ request }) => {
   const responseJson = await response.json();
   const productEdges = responseJson.data?.products?.edges || [];
 
-  // Fetch existing product assignments
+  // Fetch existing product assignments (Table Charts)
   const assignments = await prisma.productTemplateAssignment.findMany({
+    where: { shop },
+    include: { template: { select: { id: true, name: true } } },
+  });
+
+  // Fetch existing tailor template assignments (Custom Templates)
+  const customAssignments = await prisma.tailorTemplateAssignment.findMany({
     where: { shop },
     include: { template: { select: { id: true, name: true } } },
   });
@@ -187,9 +193,19 @@ export const loader = async ({ request }) => {
     };
   });
 
+  // Create map for custom assignments
+  const customAssignmentMap = {};
+  customAssignments.forEach((a) => {
+    customAssignmentMap[a.productId] = {
+      templateId: a.templateId,
+      templateName: a.template.name,
+    };
+  });
+
   const products = productEdges.map((edge) => {
     const productId = edge.node.id.split("/").pop() || "";
     const assignment = assignmentMap[productId];
+    const customAssignment = customAssignmentMap[productId];
     return {
       id: productId,
       name: edge.node.title,
@@ -197,6 +213,8 @@ export const loader = async ({ request }) => {
       image: edge.node.featuredImage?.url || "placeholder",
       assignedTemplateId: assignment?.templateId || null,
       assignedTemplateName: assignment?.templateName || null,
+      assignedCustomTemplateId: customAssignment?.templateId || null,
+      assignedCustomTemplateName: customAssignment?.templateName || null,
     };
   });
 
@@ -294,10 +312,13 @@ export const action = async ({ request }) => {
 
   if (intent === "assignProducts") {
     const templateId = formData.get("templateId");
+    const templateType = formData.get("templateType") || "table"; // "table" or "custom"
     const productIds = JSON.parse(formData.get("productIds") || "[]");
 
+    const modelName = templateType === "custom" ? "tailorTemplateAssignment" : "productTemplateAssignment";
+
     // 1. Unassign products that were assigned to THIS template but are NOT in the new list (Uncheck action)
-    await prisma.productTemplateAssignment.deleteMany({
+    await prisma[modelName].deleteMany({
       where: {
         shop,
         templateId,
@@ -306,7 +327,8 @@ export const action = async ({ request }) => {
     });
 
     // 2. Clear old assignments for the products in the new list (Re-assign/Steal action)
-    await prisma.productTemplateAssignment.deleteMany({
+    // This ensures a product only has ONE template of this type
+    await prisma[modelName].deleteMany({
       where: {
         shop,
         productId: { in: productIds },
@@ -320,9 +342,11 @@ export const action = async ({ request }) => {
       templateId,
     }));
 
-    await prisma.productTemplateAssignment.createMany({
-      data: assignments,
-    });
+    if (assignments.length > 0) {
+      await prisma[modelName].createMany({
+        data: assignments,
+      });
+    }
 
     return { success: true, assignedCount: productIds.length, templateId };
   }
@@ -435,6 +459,7 @@ export default function Templates() {
   const [showEditTemplateDiscardWarning, setShowEditTemplateDiscardWarning] = useState(false);
   const [showEditFieldDiscardWarning, setShowEditFieldDiscardWarning] = useState(false);
   const [draggedItemIndex, setDraggedItemIndex] = useState(null);
+  const [reassignmentConflicts, setReassignmentConflicts] = useState(null); // Array of products with conflicts
 
   // Update templates when fetcher returns data
   useEffect(() => {
@@ -544,7 +569,12 @@ export default function Templates() {
     setAssignSearch("");
     // Pre-select products that are already assigned to this template
     const alreadyAssigned = products
-      .filter(p => p.assignedTemplateId === templateId)
+      .filter(p => {
+        if (templateType === 'custom') {
+          return p.assignedCustomTemplateId === templateId;
+        }
+        return p.assignedTemplateId === templateId;
+      })
       .map(p => p.id);
     setSelectedProducts(alreadyAssigned);
     setInitialSelectedProducts(alreadyAssigned);
@@ -582,15 +612,50 @@ export default function Templates() {
   };
 
   // Assign products to template
-  const handleAssignProducts = () => {
+  const submitAssignment = () => {
     if (!assignModalTemplate) return;
 
     const formData = new FormData();
     formData.append("intent", "assignProducts");
     formData.append("templateId", assignModalTemplate.id);
+    formData.append("templateType", assignModalTemplate.type || "table");
     formData.append("productIds", JSON.stringify(selectedProducts));
 
     fetcher.submit(formData, { method: "POST" });
+    setReassignmentConflicts(null); // Close modal if open
+  };
+
+  // Assign products to template
+  const handleAssignProducts = () => {
+    if (!assignModalTemplate) return;
+
+    // Check for conflicts
+    const conflicts = [];
+    const isCustom = (assignModalTemplate.type === "custom");
+
+    selectedProducts.forEach(productId => {
+      const product = products.find(p => p.id === productId);
+      if (!product) return;
+
+      const currentAssignedId = isCustom ? product.assignedCustomTemplateId : product.assignedTemplateId;
+      const currentAssignedName = isCustom ? product.assignedCustomTemplateName : product.assignedTemplateName;
+
+      // Conflict if assigned to a DIFFERENT template (not null, not current)
+      if (currentAssignedId && currentAssignedId !== assignModalTemplate.id) {
+        conflicts.push({
+          id: product.id,
+          name: product.name,
+          currentTemplateName: currentAssignedName || "Unknown Template"
+        });
+      }
+    });
+
+    if (conflicts.length > 0) {
+      setReassignmentConflicts(conflicts);
+      return;
+    }
+
+    submitAssignment();
   };
 
   // Create Template Modal Handlers
@@ -1869,7 +1934,7 @@ export default function Templates() {
                               <h3 className="text-sm font-medium text-gray-900 mb-1">{product.name}</h3>
                               <div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
                                 <span>ID: {product.productId}</span>
-                                {product.assignedTemplateName && (
+                                {activeTab === "table" && product.assignedTemplateName && (
                                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${product.assignedTemplateId === assignModalTemplate?.id
                                     ? "bg-green-100 text-green-700 border border-green-200"
                                     : "bg-yellow-100 text-yellow-700 border border-yellow-200"
@@ -1877,6 +1942,17 @@ export default function Templates() {
                                     {product.assignedTemplateId === assignModalTemplate?.id
                                       ? "Assigned to this template"
                                       : `Assigned to: ${product.assignedTemplateName}`
+                                    }
+                                  </span>
+                                )}
+                                {activeTab === "custom" && product.assignedCustomTemplateName && (
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ${product.assignedCustomTemplateId === assignModalTemplate?.id
+                                    ? "bg-green-100 text-green-700 border border-green-200"
+                                    : "bg-yellow-100 text-yellow-700 border border-yellow-200"
+                                    }`}>
+                                    {product.assignedCustomTemplateId === assignModalTemplate?.id
+                                      ? "Assigned to this template"
+                                      : `Assigned to: ${product.assignedCustomTemplateName}`
                                     }
                                   </span>
                                 )}
@@ -1926,6 +2002,57 @@ export default function Templates() {
           </div>
         )
       }
+
+      {/* Reassignment Confirmation Modal */}
+      {reassignmentConflicts && (
+        <div className="fixed inset-0 bg-black/50 z-[350] flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Reassign Products?</h3>
+                <p className="text-sm text-gray-600">Some selected products are already assigned to other templates.</p>
+              </div>
+            </div>
+
+            <div className="mb-6 max-h-40 overflow-y-auto bg-gray-50 rounded-lg p-3 border border-gray-100">
+              <ul className="space-y-2">
+                {reassignmentConflicts.map(product => (
+                  <li key={product.id} className="text-sm text-gray-700 flex justify-between">
+                    <span className="font-medium truncate max-w-[50%]">{product.name}</span>
+                    <span className="text-gray-500 text-xs">Currently: {product.currentTemplateName}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <p className="text-sm text-gray-500 mb-6">
+              Continuing will unassign them from their current templates and assign them to <strong>"{assignModalTemplate?.name}"</strong>.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setReassignmentConflicts(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitAssignment}
+                className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 cursor-pointer transition-colors"
+              >
+                Reassign & Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Size Chart Modal */}
       {
