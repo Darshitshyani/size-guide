@@ -250,7 +250,8 @@ export default function CustomTailor() {
     const [deleteConfirmField, setDeleteConfirmField] = useState(null); // Field pending deletion confirmation
     const [initialMeasurementFields, setInitialMeasurementFields] = useState(tailorPresets[0].defaultFields.map((f, i) => ({ id: Date.now() + i, ...f, enabled: true }))); // Track initial state for change detection
     const [pendingPresetChange, setPendingPresetChange] = useState(null); // Pending preset when discard warning is shown
-    const [showDiscardWarning, setShowDiscardWarning] = useState(false); // Show discard changes warning
+    const [showDiscardWarning, setShowDiscardWarning] = useState(false); // Show discard changes warning for presets
+    const [showEditDiscardWarning, setShowEditDiscardWarning] = useState(false); // Show discard changes warning for edit modal
     const [draggedFieldId, setDraggedFieldId] = useState(null); // Track which field is being dragged
     const [previewActiveTab, setPreviewActiveTab] = useState("details"); // "details" or "howto" for preview modal tabs
 
@@ -393,6 +394,39 @@ export default function CustomTailor() {
                 setCollarOptions(newCollars);
             }
             setUploadCollarIndex(null);
+        }
+    };
+
+    const handleCloseEditModal = (forceClose = false) => {
+        if (forceClose) {
+            setEditModalField(null);
+            setEditModalFile(null);
+            setShowEditDiscardWarning(false);
+            return;
+        }
+
+        // Find original field
+        const originalField = measurementFields.find(f => f.id === editModalField.id);
+        if (!originalField) {
+            setEditModalField(null);
+            return;
+        }
+
+        // Check for changes
+        const hasChanges =
+            originalField.name !== editModalField.name ||
+            originalField.unit !== editModalField.unit ||
+            originalField.range !== editModalField.range ||
+            originalField.instruction !== editModalField.instruction ||
+            originalField.required !== editModalField.required ||
+            originalField.image !== editModalField.image ||
+            editModalFile !== (originalField.file || null);
+
+        if (hasChanges) {
+            setShowEditDiscardWarning(true);
+        } else {
+            setEditModalField(null);
+            setEditModalFile(null);
         }
     };
 
@@ -968,16 +1002,11 @@ export default function CustomTailor() {
 
             {/* Edit Field Modal */}
             {editModalField && (
-                <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center" onClick={(e) => {
-                    if (e.target === e.currentTarget) {
-                        setEditModalField(null);
-                        setEditModalFile(null); // Reset file on close
-                    }
-                }}>
+                <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
                         <div className="flex items-center justify-between p-4 border-b border-gray-200">
                             <h2 className="text-lg font-bold text-gray-900">Edit Measurement Field</h2>
-                            <button onClick={() => setEditModalField(null)} className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer">
+                            <button onClick={() => handleCloseEditModal()} className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer">
                                 <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
@@ -1033,7 +1062,7 @@ export default function CustomTailor() {
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Guide Image</label>
                                 <div className="flex gap-4 items-start">
                                     {/* Image Preview Box */}
-                                    <div className="relative flex-shrink-0">
+                                    <div className="relative flex-shrink-0 group">
                                         <div className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50 hover:border-blue-500 transition-colors relative">
                                             {(editModalFile || editModalField.image) ? (
                                                 <img src={editModalFile ? URL.createObjectURL(editModalFile) : editModalField.image} alt="Guide" className="w-full h-full object-cover" />
@@ -1052,6 +1081,7 @@ export default function CustomTailor() {
                                                 onChange={handleFileUpload}
                                             />
                                         </div>
+                                        <p className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer text-nowrap opacity-0 group-hover:opacity-100 transition-opacity absolute top-20 mt-1 w-full text-center">Change Image</p>
                                     </div>
                                     {/* URL Input */}
                                     <div className="flex-1 space-y-2">
@@ -1068,7 +1098,7 @@ export default function CustomTailor() {
                                 </div>
                             </div>
                             {/* Required Toggle */}
-                            <label className="flex items-center gap-3 cursor-pointer">
+                            <label className="flex items-center gap-3 cursor-pointer mt-7">
                                 <div className={`relative w-10 h-5 rounded-full transition-colors ${editModalField.required ? "bg-blue-600" : "bg-gray-200"}`}>
                                     <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${editModalField.required ? "translate-x-5" : ""}`} />
                                 </div>
@@ -1083,10 +1113,7 @@ export default function CustomTailor() {
                         </div>
                         <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-gray-200">
                             <button
-                                onClick={() => {
-                                    setEditModalField(null);
-                                    setEditModalFile(null);
-                                }}
+                                onClick={() => handleCloseEditModal()}
                                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
                             >
                                 Cancel
@@ -1457,6 +1484,39 @@ export default function CustomTailor() {
                                         setShowDiscardWarning(false);
                                         setPendingPresetChange(null);
                                     }}
+                                    className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 cursor-pointer"
+                                >
+                                    Discard
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Field Discard Warning Modal */}
+            {showEditDiscardWarning && (
+                <div className="fixed inset-0 bg-black/50 z-[700] flex items-center justify-center">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
+                        <div className="p-5">
+                            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-amber-100 rounded-full">
+                                <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">Discard Changes?</h3>
+                            <p className="text-sm text-gray-500 text-center mb-6">
+                                You have unsaved changes. Closing this modal will discard your current changes.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowEditDiscardWarning(false)}
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+                                >
+                                    Keep Editing
+                                </button>
+                                <button
+                                    onClick={() => handleCloseEditModal(true)}
                                     className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 cursor-pointer"
                                 >
                                     Discard
