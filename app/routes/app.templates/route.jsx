@@ -337,6 +337,28 @@ export const action = async ({ request }) => {
     return { success: true, deletedCustomTemplateId: id };
   }
 
+  if (intent === "updateCustomTemplate") {
+    const id = formData.get("id");
+    const name = formData.get("name");
+    const fields = formData.get("fields");
+    const fitPreferences = formData.get("fitPreferences");
+    const collarOptions = formData.get("collarOptions");
+    const enableStitchingNotes = formData.get("enableStitchingNotes") === "true";
+
+    const updatedTemplate = await prisma.tailorTemplate.update({
+      where: { id },
+      data: {
+        name,
+        fields,
+        fitPreferences: fitPreferences || null,
+        collarOptions: collarOptions || null,
+        enableStitchingNotes,
+      },
+    });
+
+    return { success: true, updatedCustomTemplate: updatedTemplate };
+  }
+
   return { error: "Invalid intent" };
 };
 
@@ -397,6 +419,21 @@ export default function Templates() {
   const [customTemplateViewTab, setCustomTemplateViewTab] = useState("details"); // "details" or "howto"
   const [customTemplateInfoField, setCustomTemplateInfoField] = useState(null); // Field for info modal in custom template view
 
+  // Edit Custom Template modal state
+  const [editCustomTemplateModal, setEditCustomTemplateModal] = useState(null); // Template being edited
+  const [editCustomTemplateName, setEditCustomTemplateName] = useState("");
+  const [editCustomTemplateFields, setEditCustomTemplateFields] = useState([]);
+  const [editCustomTemplateFitPrefs, setEditCustomTemplateFitPrefs] = useState([]);
+  const [editCustomTemplateCollars, setEditCustomTemplateCollars] = useState([]);
+  const [editEnableFitPrefs, setEditEnableFitPrefs] = useState(false);
+  const [editEnableStitchingNotes, setEditEnableStitchingNotes] = useState(false);
+  const [editEnableCollars, setEditEnableCollars] = useState(false);
+
+  // Edit Field Modal state (within Edit Custom Template)
+  const [editFieldModal, setEditFieldModal] = useState(null); // { index, field } being edited
+  const [editFieldModalFile, setEditFieldModalFile] = useState(null); // Pending file upload
+  const [showEditTemplateDiscardWarning, setShowEditTemplateDiscardWarning] = useState(false);
+
   // Update templates when fetcher returns data
   useEffect(() => {
     if (fetcher.data?.success && fetcher.data?.template) {
@@ -440,6 +477,22 @@ export default function Templates() {
       // Custom template deleted - remove from list
       setCustomTemplates(prev => prev.filter(t => t.id !== fetcher.data.deletedCustomTemplateId));
       setDeleteCustomTemplateConfirm(null);
+    } else if (fetcher.data?.success && fetcher.data?.updatedCustomTemplate) {
+      // Custom template updated - update in list
+      const updated = fetcher.data.updatedCustomTemplate;
+      const formattedTemplate = {
+        id: updated.id,
+        name: updated.name,
+        gender: updated.gender,
+        clothingType: updated.clothingType,
+        fields: typeof updated.fields === "string" ? JSON.parse(updated.fields) : updated.fields,
+        fitPreferences: updated.fitPreferences ? JSON.parse(updated.fitPreferences) : null,
+        collarOptions: updated.collarOptions ? JSON.parse(updated.collarOptions) : null,
+        isActive: updated.isActive,
+        dateCreated: new Date(updated.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      };
+      setCustomTemplates(prev => prev.map(t => t.id === formattedTemplate.id ? formattedTemplate : t));
+      handleCloseEditCustomTemplateModal();
     } else if (fetcher.data?.error) {
       setIsSaving(false);
       console.error("Error:", fetcher.data.error);
@@ -578,6 +631,173 @@ export default function Templates() {
 
     setIsEditMode(true);
     setEditingTemplateId(templateId);
+  };
+
+  // Edit Custom Template Modal Handlers
+  const handleOpenEditCustomTemplateModal = (template) => {
+    setEditCustomTemplateModal(template);
+    setEditCustomTemplateName(template.name);
+    // Clone fields with IDs for editing
+    const fieldsWithIds = (template.fields || []).map((f, i) => ({ id: Date.now() + i, ...f, enabled: f.enabled !== false }));
+    setEditCustomTemplateFields(fieldsWithIds);
+    // Load Fit Preferences
+    if (template.fitPreferences && template.fitPreferences.length > 0) {
+      setEditEnableFitPrefs(true);
+      setEditCustomTemplateFitPrefs(template.fitPreferences.map((fp, i) => ({ id: Date.now() + i + 100, ...fp })));
+    } else {
+      setEditEnableFitPrefs(false);
+      setEditCustomTemplateFitPrefs([
+        { id: 1, label: "Slim", allowance: "+0.5 inch", enabled: true },
+        { id: 2, label: "Regular", allowance: "+2.0 inch", enabled: true },
+        { id: 3, label: "Loose", allowance: "+4.0 inch", enabled: true }
+      ]);
+    }
+    // Load Collar Options
+    if (template.collarOptions && template.collarOptions.length > 0) {
+      setEditEnableCollars(true);
+      setEditCustomTemplateCollars(template.collarOptions.map((co, i) => ({ id: Date.now() + i + 200, ...co })));
+    } else {
+      setEditEnableCollars(false);
+      setEditCustomTemplateCollars([
+        { id: 1, name: "Button Down Collar", image: "", enabled: true },
+        { id: 2, name: "Band Collar", image: "", enabled: true },
+        { id: 3, name: "Spread Collar", image: "", enabled: true }
+      ]);
+    }
+    // Load Stitching Notes
+    setEditEnableStitchingNotes(template.enableStitchingNotes || false);
+  };
+
+  // Check if there are unsaved changes in the Edit Custom Template modal
+  const hasEditTemplateChanges = () => {
+    if (!editCustomTemplateModal) return false;
+    const original = editCustomTemplateModal;
+
+    // Helper to normalize strings for comparison (treat null/undefined as "")
+    const normalize = (val) => (val === null || val === undefined) ? "" : String(val).trim();
+    const normalizeBool = (val) => !!val;
+
+    // Check name
+    if (normalize(editCustomTemplateName) !== normalize(original.name)) return true;
+
+    // Check fields length
+    const originalFields = original.fields || [];
+    if (editCustomTemplateFields.length !== originalFields.length) return true;
+
+    // Check field content
+    for (let i = 0; i < originalFields.length; i++) {
+      const origField = originalFields[i];
+      const editField = editCustomTemplateFields[i];
+      if (!editField) return true;
+      if (normalize(editField.name) !== normalize(origField.name) ||
+        normalize(editField.unit) !== normalize(origField.unit) ||
+        normalize(editField.instruction) !== normalize(origField.instruction) ||
+        normalize(editField.range) !== normalize(origField.range) ||
+        normalizeBool(editField.required) !== normalizeBool(origField.required)) return true;
+    }
+
+    // Check Advance Features - Fit Preferences
+    const origFitPrefs = original.fitPreferences || [];
+    const currentFitPrefs = editCustomTemplateFitPrefs;
+    const wasEnabledFit = origFitPrefs.length > 0;
+
+    if (editEnableFitPrefs !== wasEnabledFit) return true;
+
+    if (editEnableFitPrefs) {
+      if (currentFitPrefs.length !== origFitPrefs.length) return true;
+      for (let i = 0; i < currentFitPrefs.length; i++) {
+        const cur = currentFitPrefs[i];
+        const orig = origFitPrefs[i];
+        if (normalize(cur.label) !== normalize(orig.label) || normalize(cur.allowance) !== normalize(orig.allowance)) return true;
+      }
+    }
+
+    // Check Advance Features - Collar Options
+    const origCollars = original.collarOptions || [];
+    const currentCollars = editCustomTemplateCollars;
+    const wasEnabledCollars = origCollars.length > 0;
+
+    if (editEnableCollars !== wasEnabledCollars) return true;
+
+    if (editEnableCollars) {
+      if (currentCollars.length !== origCollars.length) return true;
+      for (let i = 0; i < currentCollars.length; i++) {
+        const cur = currentCollars[i];
+        const orig = origCollars[i];
+        if (normalize(cur.name) !== normalize(orig.name) || normalize(cur.image) !== normalize(orig.image)) return true;
+      }
+    }
+
+    // Check Stitching Notes
+    if (editEnableStitchingNotes !== (original.enableStitchingNotes || false)) return true;
+
+    return false;
+  };
+
+  const handleTryCloseEditTemplateModal = () => {
+    if (hasEditTemplateChanges()) {
+      setShowEditTemplateDiscardWarning(true);
+    } else {
+      handleCloseEditCustomTemplateModal();
+    }
+  };
+
+  const handleCloseEditCustomTemplateModal = () => {
+    setEditCustomTemplateModal(null);
+    setEditCustomTemplateName("");
+    setEditCustomTemplateFields([]);
+    setEditCustomTemplateFitPrefs([]);
+    setEditCustomTemplateCollars([]);
+    setEditEnableFitPrefs(false);
+    setEditEnableStitchingNotes(false);
+    setEditEnableCollars(false);
+    setShowEditTemplateDiscardWarning(false);
+  };
+
+  const handleUpdateCustomTemplate = async () => {
+    if (!editCustomTemplateModal) return;
+    if (!editCustomTemplateName.trim()) return;
+
+    // Process field image uploads if any have pending files
+    const processedFields = await Promise.all(editCustomTemplateFields.map(async (field) => {
+      if (field.file) {
+        try {
+          const fd = new FormData();
+          fd.append("file", field.file);
+          const res = await fetch("/api/upload", { method: "POST", body: fd });
+          const data = await res.json();
+          if (data.url) {
+            const { file, ...rest } = field;
+            return { ...rest, image: data.url };
+          }
+        } catch (e) {
+          console.error("Field image upload failed", e);
+        }
+      }
+      const { file, ...rest } = field;
+      return rest;
+    }));
+
+    const formData = new FormData();
+    formData.append("intent", "updateCustomTemplate");
+    formData.append("id", editCustomTemplateModal.id);
+    formData.append("name", editCustomTemplateName);
+    formData.append("fields", JSON.stringify(processedFields.map(({ id, isEditing, enabled, ...rest }) => rest)));
+
+    // Add Fit Preferences if enabled
+    if (editEnableFitPrefs) {
+      formData.append("fitPreferences", JSON.stringify(editCustomTemplateFitPrefs.map(({ id, ...rest }) => rest)));
+    }
+
+    // Add Collar Options if enabled
+    if (editEnableCollars) {
+      formData.append("collarOptions", JSON.stringify(editCustomTemplateCollars.map(({ id, ...rest }) => rest)));
+    }
+
+    // Add Stitching Notes toggle
+    formData.append("enableStitchingNotes", editEnableStitchingNotes.toString());
+
+    fetcher.submit(formData, { method: "POST" });
   };
 
   const handleOpenCreateModal = () => {
@@ -1301,7 +1521,7 @@ export default function Templates() {
                         </button>
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); window.location.href = `/app/tailor?edit=${template.id}`; }}
+                          onClick={(e) => { e.stopPropagation(); handleOpenEditCustomTemplateModal(template); }}
                           className="p-2 flex items-center gap-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-md transition-all duration-200 border border-gray-200 cursor-pointer hover:bg-gray-200"
                           title="Edit"
                         >
@@ -2595,7 +2815,7 @@ export default function Templates() {
       {/* Custom Template Field Info Modal */}
       {customTemplateInfoField && (
         <div
-          className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center"
+          className="fixed inset-0 bg-black/50 z-[500] flex items-center justify-center"
           onClick={(e) => { if (e.target === e.currentTarget) setCustomTemplateInfoField(null); }}
         >
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
@@ -2696,6 +2916,635 @@ export default function Templates() {
                 className="px-4 py-2 cursor-pointer text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Custom Template Modal */}
+      {editCustomTemplateModal && (
+        <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-start gap-4 p-5 border-b border-gray-200">
+              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-bold text-gray-900">Edit Custom Template</h2>
+                <p className="text-sm text-gray-500">{editCustomTemplateModal.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleTryCloseEditTemplateModal}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto p-5 space-y-6">
+              {/* Template Name */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span className="text-sm font-semibold text-gray-900">Template Information</span>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Template Name</label>
+                  <input
+                    type="text"
+                    value={editCustomTemplateName}
+                    onChange={(e) => setEditCustomTemplateName(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Template name"
+                  />
+                </div>
+              </div>
+
+              {/* Measurement Fields */}
+              <div>
+                <div className="flex items-center gap-2 mb-3 justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                    <span className="text-sm font-semibold text-gray-900">Measurement Fields</span>
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{editCustomTemplateFields.length}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newField = {
+                        id: Date.now(),
+                        name: "New Field",
+                        unit: "in",
+                        instruction: "",
+                        range: "",
+                        required: false,
+                        enabled: true
+                      };
+                      setEditCustomTemplateFields(prev => [...prev, newField]);
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 border border-gray-200 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Field
+                  </button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {editCustomTemplateFields.map((field, index) => (
+                    <div
+                      key={field.id}
+                      className="flex items-start gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg"
+                    >
+                      {/* Drag Handle */}
+                      <div className="text-gray-400 mt-1 cursor-grab">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                        </svg>
+                      </div>
+
+                      {/* Field Info / Inline Edit */}
+                      <div className="flex-1 min-w-0">
+                        {field.isEditing ? (
+                          /* Inline Edit Mode */
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={field.name}
+                                onChange={(e) => setEditCustomTemplateFields(prev =>
+                                  prev.map((f, i) => i === index ? { ...f, name: e.target.value } : f)
+                                )}
+                                className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Field name"
+                              />
+                              <select
+                                value={field.unit || "in"}
+                                onChange={(e) => setEditCustomTemplateFields(prev =>
+                                  prev.map((f, i) => i === index ? { ...f, unit: e.target.value } : f)
+                                )}
+                                className="px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                              >
+                                <option value="in">in</option>
+                                <option value="cm">cm</option>
+                              </select>
+                            </div>
+                            <input
+                              type="text"
+                              value={field.instruction || ""}
+                              onChange={(e) => setEditCustomTemplateFields(prev =>
+                                prev.map((f, i) => i === index ? { ...f, instruction: e.target.value } : f)
+                              )}
+                              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Measurement instruction"
+                            />
+                            <input
+                              type="text"
+                              value={field.range || ""}
+                              onChange={(e) => setEditCustomTemplateFields(prev =>
+                                prev.map((f, i) => i === index ? { ...f, range: e.target.value } : f)
+                              )}
+                              className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Range (e.g., 20-50)"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setEditCustomTemplateFields(prev =>
+                                prev.map((f, i) => i === index ? { ...f, isEditing: false } : f)
+                              )}
+                              className="text-xs text-blue-600 font-medium hover:underline cursor-pointer"
+                            >
+                              Done Editing
+                            </button>
+                          </div>
+                        ) : (
+                          /* View Mode */
+                          <>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-gray-900">{field.name}</span>
+                              <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">{field.unit || "in"}</span>
+                              {field.required && (
+                                <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                  </svg>
+                                  Required
+                                </span>
+                              )}
+                            </div>
+                            {field.instruction && (
+                              <p className="text-xs text-gray-500 mt-1 line-clamp-1">{field.instruction}</p>
+                            )}
+                            {field.range && (
+                              <p className="text-xs text-gray-400 mt-0.5">Range: {field.range}</p>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1.5">
+                        {/* View/Enable Toggle - Eye */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditCustomTemplateFields(prev =>
+                              prev.map((f, i) => i === index ? { ...f, enabled: !f.enabled } : f)
+                            );
+                          }}
+                          className={`p-1.5 rounded-full transition-colors cursor-pointer ${field.enabled !== false ? "text-green-600 hover:bg-green-50" : "text-gray-400 hover:bg-gray-100"}`}
+                          title={field.enabled !== false ? "Enabled - Click to disable" : "Disabled - Click to enable"}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={field.enabled !== false ? "M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" : "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"} />
+                          </svg>
+                        </button>
+
+                        {/* Info - (i) */}
+                        <button
+                          type="button"
+                          onClick={() => setCustomTemplateInfoField(field)}
+                          className="p-1.5 rounded-full text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                          title="View instructions"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+
+                        {/* Edit - Pencil */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Open Edit Field Modal
+                            setEditFieldModal({ index, field: { ...field } });
+                            setEditFieldModalFile(null);
+                          }}
+                          className="p-1.5 rounded-full text-yellow-600 hover:bg-yellow-50 transition-colors cursor-pointer"
+                          title="Edit field"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+
+                        {/* Required Toggle - Warning */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditCustomTemplateFields(prev =>
+                              prev.map((f, i) => i === index ? { ...f, required: !f.required } : f)
+                            );
+                          }}
+                          className={`p-1.5 rounded-full transition-colors cursor-pointer ${field.required ? "text-red-500 hover:bg-red-50" : "text-gray-400 hover:bg-gray-100"}`}
+                          title={field.required ? "Required - Click to make optional" : "Optional - Click to make required"}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                        </button>
+
+                        {/* Delete - Trash */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditCustomTemplateFields(prev => prev.filter((_, i) => i !== index));
+                          }}
+                          className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                          title="Remove field"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {editCustomTemplateFields.length === 0 && (
+                    <div className="text-center py-8 text-gray-500 text-sm">
+                      No measurement fields defined.
+                    </div>
+                  )}
+                </div>
+                {/* Add Field Button */}
+
+              </div>
+
+              {/* Advanced Features */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Advanced Features</h3>
+
+                {/* Enable Fit Preference */}
+                <div className="flex items-center gap-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditEnableFitPrefs(!editEnableFitPrefs)}
+                    className={`relative w-10 h-5 rounded-full transition-colors duration-200 cursor-pointer ${editEnableFitPrefs ? "bg-blue-600" : "bg-gray-300"}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${editEnableFitPrefs ? "translate-x-5" : ""}`} />
+                  </button>
+                  <span className="text-sm text-gray-700">Enable Fit Preference</span>
+                </div>
+                {editEnableFitPrefs && (
+                  <div className="space-y-3">
+                    {editCustomTemplateFitPrefs.map((fp, i) => (
+                      <div key={fp.id} className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
+                        <div className="flex-1 space-y-2">
+                          <input
+                            type="text"
+                            value={fp.label}
+                            onChange={(e) => setEditCustomTemplateFitPrefs(prev => prev.map((f, idx) => idx === i ? { ...f, label: e.target.value } : f))}
+                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            placeholder="Fit name (e.g., Slim)"
+                          />
+                          <input
+                            type="text"
+                            value={fp.allowance}
+                            onChange={(e) => setEditCustomTemplateFitPrefs(prev => prev.map((f, idx) => idx === i ? { ...f, allowance: e.target.value } : f))}
+                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            placeholder="Allowance (e.g., +0.5 inch)"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEditCustomTemplateFitPrefs(prev => prev.filter((_, idx) => idx !== i))}
+                          className="p-2 text-gray-400 hover:text-red-500 cursor-pointer"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setEditCustomTemplateFitPrefs(prev => [...prev, { id: Date.now(), label: "", allowance: "", enabled: true }])}
+                      className="flex items-center gap-2 text-sm text-blue-600 font-medium hover:text-blue-700 cursor-pointer"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Option
+                    </button>
+                  </div>
+                )}
+                {/* Enable Stitching Notes */}
+                <div className="flex items-center gap-3 py-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditEnableStitchingNotes(!editEnableStitchingNotes)}
+                    className={`relative w-10 h-5 rounded-full transition-colors duration-200 cursor-pointer ${editEnableStitchingNotes ? "bg-blue-600" : "bg-gray-300"}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${editEnableStitchingNotes ? "translate-x-5" : ""}`} />
+                  </button>
+                  <span className="text-sm text-gray-700">Enable Stitching Notes</span>
+                </div>
+
+                {/* Enable Collar Option */}
+                <div className="flex items-center gap-3 py-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditEnableCollars(!editEnableCollars)}
+                    className={`relative w-10 h-5 rounded-full transition-colors duration-200 cursor-pointer ${editEnableCollars ? "bg-blue-600" : "bg-gray-300"}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${editEnableCollars ? "translate-x-5" : ""}`} />
+                  </button>
+                  <span className="text-sm text-gray-700">Enable Collar Option</span>
+                </div>
+                {/* Collar Options (when enabled) */}
+                {editEnableCollars && (
+                  <div className="space-y-3">
+                    {editCustomTemplateCollars.map((co, i) => (
+                      <div key={co.id} className="flex items-start gap-4 p-4 bg-white border border-gray-200 rounded-lg">
+                        {/* Image Preview */}
+                        <div className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50 flex-shrink-0">
+                          {co.image ? (
+                            <img src={co.image} alt={co.name} className="w-full h-full object-contain" />
+                          ) : (
+                            <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          )}
+                        </div>
+                        {/* Inputs */}
+                        <div className="flex-1 space-y-2">
+                          <input
+                            type="text"
+                            value={co.name}
+                            onChange={(e) => setEditCustomTemplateCollars(prev => prev.map((c, idx) => idx === i ? { ...c, name: e.target.value } : c))}
+                            className="w-full px-3 py-2 text-sm font-medium border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            placeholder="Collar name"
+                          />
+                          <input
+                            type="text"
+                            value={co.image || ""}
+                            onChange={(e) => setEditCustomTemplateCollars(prev => prev.map((c, idx) => idx === i ? { ...c, image: e.target.value } : c))}
+                            className="w-full px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            placeholder="Image URL"
+                          />
+                        </div>
+                        {/* Delete */}
+                        <button
+                          type="button"
+                          onClick={() => setEditCustomTemplateCollars(prev => prev.filter((_, idx) => idx !== i))}
+                          className="p-2 text-gray-400 hover:text-red-500 cursor-pointer"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setEditCustomTemplateCollars(prev => [...prev, { id: Date.now(), name: "", image: "", enabled: true }])}
+                      className="flex items-center gap-2 text-sm text-blue-600 font-medium hover:text-blue-700 cursor-pointer"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Option
+                    </button>
+                  </div>
+                )}
+              </div>
+
+
+
+
+
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 bg-gray-50">
+              <button
+                type="button"
+                onClick={handleTryCloseEditTemplateModal}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleUpdateCustomTemplate}
+                disabled={fetcher.state !== "idle" || !editCustomTemplateName.trim()}
+                className={`flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-lg transition-colors ${fetcher.state !== "idle" || !editCustomTemplateName.trim()
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
+                  }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                </svg>
+                {fetcher.state !== "idle" ? "Updating..." : "Update Template"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Discard Warning Modal for Edit Custom Template */}
+      {showEditTemplateDiscardWarning && (
+        <div className="fixed inset-0 bg-black/50 z-[350] flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Discard Changes?</h3>
+                <p className="text-sm text-gray-500">You have unsaved changes that will be lost.</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowEditTemplateDiscardWarning(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                Keep Editing
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseEditCustomTemplateModal}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 cursor-pointer transition-colors"
+              >
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Field Modal (within Edit Custom Template) */}
+      {editFieldModal && (
+        <div className="fixed inset-0 bg-black/50 z-[400] flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Edit Measurement Field</h2>
+              <button
+                type="button"
+                onClick={() => { setEditFieldModal(null); setEditFieldModalFile(null); }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+              >
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-auto p-5 space-y-4">
+              {/* Field Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Field Name</label>
+                <input
+                  type="text"
+                  value={editFieldModal.field.name || ""}
+                  onChange={(e) => setEditFieldModal(prev => ({ ...prev, field: { ...prev.field, name: e.target.value } }))}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g., Chest"
+                />
+              </div>
+
+              {/* Unit */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Unit</label>
+                <select
+                  value={editFieldModal.field.unit || "in"}
+                  onChange={(e) => setEditFieldModal(prev => ({ ...prev, field: { ...prev.field, unit: e.target.value } }))}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                >
+                  <option value="in">Inches (in)</option>
+                  <option value="cm">Centimeters (cm)</option>
+                </select>
+              </div>
+
+              {/* Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Range</label>
+                <input
+                  type="text"
+                  value={editFieldModal.field.range || ""}
+                  onChange={(e) => setEditFieldModal(prev => ({ ...prev, field: { ...prev.field, range: e.target.value } }))}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g., 35 - 60"
+                />
+              </div>
+
+              {/* Measurement Instructions */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Measurement Instructions</label>
+                <textarea
+                  value={editFieldModal.field.instruction || ""}
+                  onChange={(e) => setEditFieldModal(prev => ({ ...prev, field: { ...prev.field, instruction: e.target.value } }))}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  rows={3}
+                  placeholder="Describe how to take this measurement..."
+                />
+              </div>
+
+              {/* Guide Image */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Guide Image</label>
+                <div className="flex items-start gap-3">
+                  {/* Image Preview */}
+                  <div className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50 flex-shrink-0 relative">
+                    {(editFieldModalFile || editFieldModal.field.image) ? (
+                      <img
+                        src={editFieldModalFile ? URL.createObjectURL(editFieldModalFile) : editFieldModal.field.image}
+                        alt="Guide"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                    <input
+                      type="file"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) setEditFieldModalFile(file);
+                      }}
+                    />
+                  </div>
+                  {/* URL Input */}
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      value={editFieldModal.field.image || ""}
+                      onChange={(e) => setEditFieldModal(prev => ({ ...prev, field: { ...prev.field, image: e.target.value } }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="https://..."
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Click the image box to upload or paste a URL</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Required Toggle */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditFieldModal(prev => ({ ...prev, field: { ...prev.field, required: !prev.field.required } }))}
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${editFieldModal.field.required ? "bg-blue-600" : "bg-gray-300"}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${editFieldModal.field.required ? "translate-x-5" : ""}`} />
+                </button>
+                <span className="text-sm font-medium text-gray-700">Required Field</span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 bg-gray-50">
+              <button
+                type="button"
+                onClick={() => { setEditFieldModal(null); setEditFieldModalFile(null); }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  let finalField = { ...editFieldModal.field };
+
+                  // Store file on field for deferred upload (will upload on Update Template)
+                  if (editFieldModalFile) {
+                    finalField.file = editFieldModalFile;
+                  }
+
+                  // Update field in the list
+                  setEditCustomTemplateFields(prev =>
+                    prev.map((f, i) => i === editFieldModal.index ? { ...f, ...finalField, isEditing: false } : f)
+                  );
+                  setEditFieldModal(null);
+                  setEditFieldModalFile(null);
+                }}
+                className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 cursor-pointer transition-colors"
+              >
+                Save Changes
               </button>
             </div>
           </div>

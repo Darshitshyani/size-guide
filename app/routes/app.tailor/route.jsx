@@ -77,6 +77,10 @@ export const loader = async ({ request }) => {
     const { session, admin } = await authenticate.admin(request);
     const shop = session.shop;
 
+    // Parse edit query parameter
+    const url = new URL(request.url);
+    const editTemplateId = url.searchParams.get("edit");
+
     const tailorTemplates = await prisma.tailorTemplate.findMany({
         where: { shop },
         orderBy: { createdAt: "desc" },
@@ -93,6 +97,12 @@ export const loader = async ({ request }) => {
         isActive: t.isActive,
         dateCreated: new Date(t.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     }));
+
+    // Find the template to edit if edit query param is present
+    let editingTemplate = null;
+    if (editTemplateId) {
+        editingTemplate = templates.find(t => t.id === editTemplateId) || null;
+    }
 
     const response = await admin.graphql(
         `query getProducts {
@@ -133,7 +143,7 @@ export const loader = async ({ request }) => {
         };
     });
 
-    return { templates, products };
+    return { templates, products, editingTemplate };
 };
 
 // Action
@@ -210,7 +220,7 @@ export const action = async ({ request }) => {
 };
 
 export default function CustomTailor() {
-    const { templates: initialTemplates, products: shopifyProducts } = useLoaderData();
+    const { templates: initialTemplates, products: shopifyProducts, editingTemplate } = useLoaderData();
     const fetcher = useFetcher();
     const uploadFetcher = useFetcher();
 
@@ -237,6 +247,10 @@ export default function CustomTailor() {
     const [fieldsError, setFieldsError] = useState(false);
     const [collarErrors, setCollarErrors] = useState({}); // { [id]: { name: bool, image: bool } }
 
+    // Edit mode state
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editingTemplateId, setEditingTemplateId] = useState(null);
+
     // Modal states
     const [previewSelectedCollar, setPreviewSelectedCollar] = useState(null);
     const [infoModalField, setInfoModalField] = useState(null);
@@ -258,6 +272,38 @@ export default function CustomTailor() {
 
     const products = shopifyProducts || [];
 
+    // Load template data when in edit mode
+    useEffect(() => {
+        if (editingTemplate) {
+            setIsEditMode(true);
+            setEditingTemplateId(editingTemplate.id);
+            setTemplateName(editingTemplate.name);
+
+            // Set gender and preset
+            const gender = editingTemplate.gender?.toLowerCase() || "male";
+            setSelectedGender(gender);
+            const preset = tailorPresets.find(p => p.id === editingTemplate.clothingType) || tailorPresets.find(p => p.gender === gender) || tailorPresets[0];
+            setSelectedPreset(preset);
+
+            // Set measurement fields
+            const fields = (editingTemplate.fields || []).map((f, i) => ({ id: Date.now() + i, ...f, enabled: true }));
+            setMeasurementFields(fields);
+            setInitialMeasurementFields(fields);
+
+            // Set fit preferences
+            if (editingTemplate.fitPreferences && editingTemplate.fitPreferences.length > 0) {
+                setEnableFitPreference(true);
+                setFitPreferences(editingTemplate.fitPreferences);
+            }
+
+            // Set collar options
+            if (editingTemplate.collarOptions && editingTemplate.collarOptions.length > 0) {
+                setEnableCollarOption(true);
+                setCollarOptions(editingTemplate.collarOptions);
+            }
+        }
+    }, [editingTemplate]);
+
     useEffect(() => {
         if (fetcher.data?.success && fetcher.data?.template) {
             const newTemplate = fetcher.data.template;
@@ -277,6 +323,13 @@ export default function CustomTailor() {
                 }
                 return [formattedTemplate, ...prev];
             });
+
+            // In edit mode, redirect to templates page
+            if (isEditMode) {
+                window.location.href = "/app/templates";
+                return;
+            }
+
             setTemplateName("");
 
             // Reset fields to default preset values
@@ -466,7 +519,7 @@ export default function CustomTailor() {
         if (!templateName.trim()) {
             setNameError(true);
             hasValidationError = true;
-        } else if (templates.some(t => t.name.toLowerCase() === templateName.trim().toLowerCase())) {
+        } else if (templates.some(t => t.name.toLowerCase() === templateName.trim().toLowerCase() && (!isEditMode || t.id !== editingTemplateId))) {
             setDuplicateNameError(true);
             hasValidationError = true;
         }
@@ -522,9 +575,12 @@ export default function CustomTailor() {
         }));
 
         const formData = new FormData();
-        formData.append("intent", "create");
+        formData.append("intent", isEditMode ? "update" : "create");
+        if (isEditMode && editingTemplateId) {
+            formData.append("id", editingTemplateId);
+        }
         formData.append("name", templateName);
-        formData.append("gender", "Male");
+        formData.append("gender", selectedGender.charAt(0).toUpperCase() + selectedGender.slice(1));
         formData.append("clothingType", selectedPreset.id);
         formData.append("fields", JSON.stringify(finalMeasurementFields.map(({ id, enabled, ...rest }) => rest)));
         if (enableFitPreference) {
@@ -573,7 +629,7 @@ export default function CustomTailor() {
                             : "bg-gray-900 text-white hover:bg-gray-800 cursor-pointer"
                             }`}
                     >
-                        {fetcher.state !== "idle" ? "Creating..." : "Create Template"}
+                        {fetcher.state !== "idle" ? (isEditMode ? "Saving..." : "Creating...") : (isEditMode ? "Save Changes" : "Create Template")}
                     </button>
                 </div>
 
