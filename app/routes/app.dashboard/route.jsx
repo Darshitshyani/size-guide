@@ -116,7 +116,7 @@ export default function Dashboard() {
     length: "",
     bottomOpening: "",
   });
-  const [measurementInfoModal, setMeasurementInfoModal] = useState(null);
+  const [measurementInfoModal, setMeasurementInfoModal] = useState(null); // Can be string (name) or object (field data)
   const [selectTemplateModal, setSelectTemplateModal] = useState(null);
   const [templateTab, setTemplateTab] = useState("Table Template");
   const [templateSearch, setTemplateSearch] = useState("");
@@ -220,12 +220,12 @@ export default function Dashboard() {
     setViewModalProductId(null);
   };
 
-  const handleOpenMeasurementInfo = (measurementName, e) => {
+  const handleOpenMeasurementInfo = (measurementNameOrField, e) => {
     if (e) {
       e.stopPropagation();
       e.preventDefault();
     }
-    setMeasurementInfoModal(measurementName);
+    setMeasurementInfoModal(measurementNameOrField);
   };
 
   const handleCloseMeasurementInfo = () => {
@@ -1071,117 +1071,155 @@ export default function Dashboard() {
       )}
 
       {/* Measurement Info Modal */}
-      {measurementInfoModal && (
-        <div
-          className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              handleCloseMeasurementInfo();
-            }
-          }}
-        >
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">How to Measure: {measurementInfoModal}</h2>
-                <p className="text-sm text-gray-600 mt-1">Follow these instructions to get accurate measurements.</p>
+      {measurementInfoModal && (() => {
+        // Handle both string (legacy) and object (field data) formats
+        const isFieldObject = typeof measurementInfoModal === 'object' && measurementInfoModal !== null;
+        const fieldName = isFieldObject ? measurementInfoModal.name : measurementInfoModal;
+        const field = isFieldObject ? measurementInfoModal : null;
+        
+        // Get instruction text
+        const getInstruction = () => {
+          if (field && field.instruction) return field.instruction;
+          // Fallback for legacy string-based calls
+          if (fieldName === "Chest" || fieldName === "Chest / Bust") return "Measure around the fullest part of the chest.";
+          if (fieldName === "Waist") return "Measure around natural waist.";
+          if (fieldName === "Shoulder") return "Measure from the edge of one shoulder to the edge of the other shoulder across the back.";
+          if (fieldName === "Sleeve Length") return "Measure from the shoulder point down to where you want the sleeve to end.";
+          if (fieldName === "Armhole") return "Measure around the armhole opening, ensuring the tape follows the curve of the armhole seam.";
+          if (fieldName === "Length") return "Measure from the top of the shoulder down to the desired length of the garment.";
+          return "Follow the standard measurement guidelines for this field.";
+        };
+
+        // Get image URL
+        const imageUrl = field?.image || null;
+        
+        // Get unit
+        const unit = field?.unit || "in";
+        
+        // Get range
+        const range = field?.range || "35 - 60 in";
+        
+        // Get required status
+        const isRequired = field?.required !== false; // Default to true if not specified
+
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-[500] flex  items-center justify-center"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                handleCloseMeasurementInfo();
+              }
+            }}
+          >
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-lg overflow-hidden flex flex-col">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900">{fieldName}</h2>
+                <button
+                  type="button"
+                  onClick={handleCloseMeasurementInfo}
+                  className="p-1 hover:bg-gray-100 rounded transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleCloseMeasurementInfo}
-                className="ml-4 p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
 
-            {/* Modal Content */}
-            <div className="flex-1 overflow-auto p-6">
-              <div className="space-y-6">
-                {/* Guide Image Placeholder */}
-                <div className="w-full flex justify-center">
-                  <div className="w-full max-w-md bg-white border-2 border-dashed border-gray-300 rounded-lg p-12 flex flex-col items-center justify-center">
-                    {/* Mountain Icon with Sun */}
-                    <svg
-                      viewBox="0 0 120 80"
-                      className="w-32 h-20 mb-4"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      {/* Sun */}
-                      <circle cx="25" cy="20" r="8" fill="#9ca3af" opacity="0.6" />
-                      <circle cx="25" cy="20" r="6" fill="#d1d5db" />
-
-                      {/* Mountains */}
-                      <path
-                        d="M 20 60 L 35 40 L 45 55 L 60 30 L 75 50 L 85 35 L 100 50 L 105 45 L 110 50 L 120 60 L 20 60 Z"
-                        fill="#d1d5db"
-                        stroke="#9ca3af"
-                        strokeWidth="1"
+              {/* Modal Content */}
+              <div className="flex-1 justify-center items-center overflow-auto px-6 py-6">
+                <div className="space-y-6">
+                  {/* Guide Image */}
+                  <div className="flex justify-center items-center">
+                  <div className="w-[250px] h-[250px] shadow-lg flex justify-center rounded-lg">
+                    {imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt={`How to measure ${fieldName}`}
+                        className=" rounded-lg object-contain"
                       />
-                      <path
-                        d="M 30 60 L 40 48 L 50 55 L 60 40 L 75 52 L 85 38 L 95 50 L 110 60 L 30 60 Z"
-                        fill="#e5e7eb"
-                      />
-                    </svg>
+                    ) : (
+                      <div className="w-full bg-white border-2 border-dashed border-gray-300 rounded-lg p-12 flex flex-col items-center justify-center">
+                        {/* Mountain Icon with Sun */}
+                        <svg
+                          viewBox="0 0 120 80"
+                          className="w-32 h-20 mb-4"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          {/* Sun */}
+                          <circle cx="25" cy="20" r="8" fill="#9ca3af" opacity="0.6" />
+                          <circle cx="25" cy="20" r="6" fill="#d1d5db" />
 
-                    {/* Placeholder Text */}
-                    <p className="text-gray-600 text-sm font-medium text-center">
-                      No guide image available
+                          {/* Mountains */}
+                          <path
+                            d="M 20 60 L 35 40 L 45 55 L 60 30 L 75 50 L 85 35 L 100 50 L 105 45 L 110 50 L 120 60 L 20 60 Z"
+                            fill="#d1d5db"
+                            stroke="#9ca3af"
+                            strokeWidth="1"
+                          />
+                          <path
+                            d="M 30 60 L 40 48 L 50 55 L 60 40 L 75 52 L 85 38 L 95 50 L 110 60 L 30 60 Z"
+                            fill="#e5e7eb"
+                          />
+                        </svg>
+
+                        {/* Placeholder Text */}
+                        <p className="text-gray-600 text-sm font-medium text-center">
+                          No guide image available
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  </div>
+
+                  {/* Measurement Instructions */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <h3 className="text-base font-semibold text-gray-900">Instructions</h3>
+                    </div>
+                    <p className="text-gray-700 text-sm leading-relaxed">
+                      {getInstruction()}
                     </p>
                   </div>
-                </div>
 
-                {/* Measurement Instructions */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <h3 className="text-lg font-semibold text-gray-900">Measurement Instructions</h3>
-                  </div>
-                  <p className="text-gray-700 text-sm leading-relaxed">
-                    {measurementInfoModal === "Chest / Bust"
-                      ? "For kurta, measure around the fullest part of the chest. Kurta should have 2-3 inches of ease for comfortable fit."
-                      : measurementInfoModal === "Waist"
-                        ? "Measure around the narrowest part of your waist. Keep it parallel to the floor and snug but not tight."
-                        : measurementInfoModal === "Shoulder"
-                          ? "Measure from the edge of one shoulder to the edge of the other shoulder across the back."
-                          : measurementInfoModal === "Sleeve Length"
-                            ? "Measure from the shoulder point down to where you want the sleeve to end."
-                            : measurementInfoModal === "Armhole"
-                              ? "Measure around the armhole opening, ensuring the tape follows the curve of the armhole seam."
-                              : measurementInfoModal === "Length"
-                                ? "Measure from the top of the shoulder down to the desired length of the garment."
-                                : "Follow the standard measurement guidelines for this field."}
-                  </p>
-                </div>
-
-                {/* Measurement Details */}
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Measurement Details</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                      <span className="text-sm font-medium text-gray-700">Unit</span>
-                      <span className="text-sm text-gray-600">Inches</span>
-                    </div>
-                    <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                      <span className="text-sm font-medium text-gray-700">Required</span>
-                      <span className="text-sm text-red-500 font-medium">Yes</span>
-                    </div>
-                    <div className="flex items-center justify-between py-2">
-                      <span className="text-sm font-medium text-gray-700">Range</span>
-                      <span className="text-sm text-gray-600">20 - 60 in</span>
+                  {/* Measurement Details */}
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900 mb-3">Measurement Details</h3>
+                    <div className="space-y-0">
+                      <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
+                        <span className="text-sm font-medium text-gray-700">Unit</span>
+                        <span className="text-sm text-gray-600">{unit}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2.5 border-b border-gray-100">
+                        <span className="text-sm font-medium text-gray-700">Range</span>
+                        <span className="text-sm text-gray-600">{range}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2.5">
+                        <span className="text-sm font-medium text-gray-700">Required</span>
+                        <span className="text-sm text-red-500 font-medium">{isRequired ? "Yes" : "No"}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex justify-end px-6 py-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={handleCloseMeasurementInfo}
+                  className="px-6 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Select Template Modal */}
       {selectTemplateModal && (
@@ -1532,9 +1570,13 @@ export default function Dashboard() {
                   {viewTemplateModal.fields.map((field, index) => (
                     <div key={index} className="flex items-center gap-4">
                       {/* Info Icon */}
-                      <div className="w-6 h-6 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenMeasurementInfo(field, e)}
+                        className="w-6 h-6 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors cursor-pointer"
+                      >
                         <span className="text-xs text-gray-600 font-semibold">i</span>
-                      </div>
+                      </button>
                       {/* Field Name */}
                       <div className="w-32 flex-shrink-0">
                         <span className="text-sm font-medium text-gray-900">
@@ -1560,24 +1602,26 @@ export default function Dashboard() {
               {viewTemplateModal.fields && !viewTemplateModal.columns && viewTemplateSubTab === "How to Measure" && (
                 <div className="space-y-4">
                   {viewTemplateModal.fields.map((field, index) => (
-                    <div key={index} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div key={index} className="bg-gray-100 p-4 rounded-lg border border-gray-200">
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-semibold text-gray-900">
+                        <h4 className="text-base font-semibold text-gray-900">
                           {field.name}
-                          {field.required && <span className="text-red-500 ml-0.5">*</span>}
+                          {field.required && <span className="text-red-500"> *</span>}
                         </h4>
-                        {field.unit && (
-                          <span className="text-xs text-gray-500">{field.unit}</span>
-                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => handleOpenMeasurementInfo(field, e)}
+                          className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors cursor-pointer"
+                        >
+                          <span className="text-xs text-gray-600 font-semibold">i</span>
+                        </button>
                       </div>
-                      <p className="text-sm text-gray-600">
-                        {field.instruction || `Enter your ${field.name.toLowerCase()} measurement.`}
+                      <p className="text-gray-700 text-sm leading-relaxed mb-2">
+                        {field.instruction || `Measure around the fullest part of the ${field.name.toLowerCase()}.`}
                       </p>
-                      {field.range && (
-                        <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-200">
-                          Range: {field.range}
-                        </p>
-                      )}
+                      <p className="text-sm text-gray-600 border-t border-gray-300 pt-2">
+                        Range: {field.range || "35 - 60 in"}
+                      </p>
                     </div>
                   ))}
                 </div>
