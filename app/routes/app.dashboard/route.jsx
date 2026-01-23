@@ -886,28 +886,16 @@ export default function Dashboard() {
         {activeTab === "products" && (
           <div className="border border-gray-200 rounded-md bg-white flex-1 flex flex-col overflow-hidden">
             <div className="overflow-auto flex-1">
-              <table className="w-full border-collapse">
+              <table className="w-full border-collapse min-w-full">
                 <colgroup>
-                  <col style={{ width: '60px' }} />
-                  <col style={{ width: '300px' }} />
-                  <col style={{ width: '240px' }} />
+                  <col style={{ width: 'auto' }} />
+                  <col style={{ width: '120px' }} />
                   <col style={{ width: '180px' }} />
                   <col style={{ width: '180px' }} />
-                  <col style={{ width: '240px' }} />
+                  <col style={{ width: '120px' }} />
                 </colgroup>
                 <thead className="sticky top-0 z-10 bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 cursor-pointer text-blue-600 border-gray-300 rounded focus:outline-none"
-                        checked={
-                          filteredProducts.length > 0 &&
-                          selectedProducts.length === filteredProducts.length
-                        }
-                        onChange={handleSelectAll}
-                      />
-                    </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700  tracking-wider bg-gray-50 border-b border-gray-200">PRODUCT</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700  tracking-wider bg-gray-50 border-b border-gray-200">DATE</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700  tracking-wider bg-gray-50 border-b border-gray-200">TABLE CHART STATUS</th>
@@ -918,7 +906,7 @@ export default function Dashboard() {
                 <tbody>
                   {filteredProducts.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="px-4 text-center" style={{ height: '400px' }}>
+                      <td colSpan="5" className="px-4 text-center" style={{ height: '400px' }}>
                         <div className="flex flex-col items-center justify-center h-full">
                           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                             <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -937,14 +925,6 @@ export default function Dashboard() {
                   ) : (
                     filteredProducts.map((product) => (
                     <tr key={product.id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors last:border-b-0">
-                      <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 cursor-pointer text-blue-600  border-gray-300 rounded focus:outline-none"
-                          checked={selectedProducts.includes(product.id)}
-                          onChange={() => handleSelectProduct(product.id)}
-                        />
-                      </td>
                       <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           {product.image && (
