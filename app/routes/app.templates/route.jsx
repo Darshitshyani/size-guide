@@ -3291,9 +3291,13 @@ export default function Templates() {
                             <input
                               type="text"
                               value={field.range || ""}
-                              onChange={(e) => setEditCustomTemplateFields(prev =>
-                                prev.map((f, i) => i === index ? { ...f, range: e.target.value } : f)
-                              )}
+                              onChange={(e) => {
+                                // Only allow numbers, spaces, dashes, and commas
+                                const value = e.target.value.replace(/[^0-9\s\-,]/g, '');
+                                setEditCustomTemplateFields(prev =>
+                                  prev.map((f, i) => i === index ? { ...f, range: value } : f)
+                                );
+                              }}
                               className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               placeholder="Range (e.g., 20-50)"
                             />
@@ -3325,10 +3329,26 @@ export default function Templates() {
                             {field.instruction && (
                               <p className="text-xs text-gray-500 mt-1 line-clamp-1">{field.instruction}</p>
                             )}
+                            {!field.instruction || (typeof field.instruction === 'string' && field.instruction.trim() === "") ? (
+                              <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                Please add measurement instructions.
+                              </p>
+                            ) : null}
                             {field.range && (
                               <p className="text-xs text-gray-400 mt-0.5">Range: {field.range}</p>
                             )}
-                            {!field.image && (
+                            {!field.range || (typeof field.range === 'string' && field.range.trim() === "") ? (
+                              <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                Please add a range for this measurement.
+                              </p>
+                            ) : null}
+                            {(!field.image || (typeof field.image === 'string' && field.image.trim() === "")) && !field.file && (
                               <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -3800,7 +3820,11 @@ export default function Templates() {
                 <input
                   type="text"
                   value={editFieldModal.field.range || ""}
-                  onChange={(e) => setEditFieldModal(prev => ({ ...prev, field: { ...prev.field, range: e.target.value } }))}
+                  onChange={(e) => {
+                    // Only allow numbers, spaces, dashes, and commas
+                    const value = e.target.value.replace(/[^0-9\s\-,]/g, '');
+                    setEditFieldModal(prev => ({ ...prev, field: { ...prev.field, range: value } }));
+                  }}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="e.g., 35 - 60"
                 />
