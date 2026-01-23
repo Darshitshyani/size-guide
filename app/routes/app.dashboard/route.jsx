@@ -1010,6 +1010,7 @@ export default function Dashboard() {
         
         // Auto-select first available tab if current is not available
         const effectiveMainTab = availableTabs.includes(modalMainTab) ? modalMainTab : availableTabs[0];
+        const isCustomView = effectiveMainTab === "Custom Size";
         
         return (
         <div
@@ -1020,7 +1021,7 @@ export default function Dashboard() {
             }
           }}
         >
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+          <div className={`bg-white rounded-lg shadow-xl w-full ${isCustomView ? "max-w-xl" : "max-w-3xl"} max-h-[80vh] overflow-hidden flex flex-col`}>
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div className="flex items-center gap-4">
@@ -1566,6 +1567,27 @@ export default function Dashboard() {
                                   Delete Chart
                                 </button>
                               )}
+                              {/* View Button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  handleOpenViewTemplate({
+                                    name: template.name,
+                                    columns: template.columns || null,
+                                    rows: template.rows || null,
+                                    guideImage: template.guideImage,
+                                    measureDescription: template.measureDescription,
+                                    gender: template.gender,
+                                    clothingType: template.category
+                                  }, e);
+                                }}
+                                className="px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                              >
+                                View
+                              </button>
+                              {/* Assign Button */}
                               <button
                                 type="button"
                                 onClick={(e) =>
@@ -1641,6 +1663,24 @@ export default function Dashboard() {
                                   Delete Chart
                                 </button>
                               )}
+                              {/* View Button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  handleOpenViewTemplate({
+                                    name: template.name,
+                                    fields: template.fields || null,
+                                    gender: template.gender,
+                                    clothingType: template.clothingType
+                                  }, e);
+                                }}
+                                className="px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                              >
+                                View
+                              </button>
+                              {/* Assign Button */}
                               <button
                                 type="button"
                                 onClick={(e) =>
@@ -1697,31 +1737,35 @@ export default function Dashboard() {
       {/* View Template Modal */}
       {viewTemplateModal && (
         <div
-          className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center"
+          className="fixed inset-0 bg-black/50 z-[400] flex items-center justify-center"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               handleCloseViewTemplate();
             }
           }}
         >
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className={`bg-white rounded-lg shadow-xl w-full max-h-[90vh] overflow-hidden flex flex-col ${viewTemplateModal.columns ? "max-w-3xl" : "max-w-xl"}`}>
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <div className="flex items-center gap-3">
-                {/* Icon for custom templates */}
-                {viewTemplateModal.fields && !viewTemplateModal.columns && (
-                  <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                {/* Icon - table chart icon for table templates, shirt icon for custom */}
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  {viewTemplateModal.columns ? (
                     <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
-                  </div>
-                )}
+                  ) : (
+                    <svg className="w-6 h-6 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M14.515 5l2.606-2.607a1 1 0 01.707-.293H21a1 1 0 011 1v3.172a1 1 0 01-.293.707L19 9.686V20a1 1 0 01-1 1H6a1 1 0 01-1-1V9.686L2.293 6.979A1 1 0 012 6.272V3.1a1 1 0 011-1h3.172a1 1 0 01.707.293L9.485 5h5.03z"/>
+                    </svg>
+                  )}
+                </div>
                 <div>
                   <h2 className="text-lg font-bold text-gray-900">{viewTemplateModal.name}</h2>
-                  {/* Subtitle for custom templates */}
-                  {viewTemplateModal.fields && !viewTemplateModal.columns && (
+                  {/* Subtitle - show for both template types */}
+                  {(viewTemplateModal.gender || viewTemplateModal.clothingType) && (
                     <p className="text-sm text-gray-500 capitalize">
-                      {viewTemplateModal.gender} • {viewTemplateModal.clothingType}
+                      {viewTemplateModal.gender}{viewTemplateModal.gender && viewTemplateModal.clothingType ? " • " : ""}{viewTemplateModal.clothingType}
                     </p>
                   )}
                 </div>
@@ -1856,31 +1900,27 @@ export default function Dashboard() {
               {viewTemplateModal.fields && !viewTemplateModal.columns && viewTemplateSubTab === "Details" && (
                 <div className="space-y-4">
                   {viewTemplateModal.fields.map((field, index) => (
-                    <div key={index} className="flex items-center gap-4">
+                    <div key={index} className="flex items-center gap-3">
                       {/* Info Icon */}
                       <button
                         type="button"
                         onClick={(e) => handleOpenMeasurementInfo(field, e)}
-                        className="w-6 h-6 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors cursor-pointer"
+                        className="w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-100 transition-colors cursor-pointer"
                       >
-                        <span className="text-xs text-gray-600 font-semibold">i</span>
+                        <span className="text-xs text-gray-500">i</span>
                       </button>
                       {/* Field Name */}
-                      <div className="w-32 flex-shrink-0">
-                        <span className="text-sm font-medium text-gray-900">
-                          {field.name}
-                          {field.required && <span className="text-red-500 ml-0.5">*</span>}
-                        </span>
-                      </div>
+                      <span className="text-sm font-medium text-gray-800 w-28 flex-shrink-0">
+                        {field.name}
+                        {field.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </span>
                       {/* Input Placeholder */}
-                      <div className="flex-1">
-                        <input
-                          type="text"
-                          placeholder={`Enter ${field.name.toLowerCase()}`}
-                          readOnly
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-400 text-sm cursor-not-allowed"
-                        />
-                      </div>
+                      <input
+                        type="text"
+                        placeholder={`Enter ${field.name.toLowerCase()}`}
+                        readOnly
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-400 text-sm cursor-default"
+                      />
                     </div>
                   ))}
                 </div>
@@ -1914,15 +1954,22 @@ export default function Dashboard() {
                   ))}
                 </div>
               )}
+
+              {/* Fallback - No data available */}
+              {!viewTemplateModal.columns && !viewTemplateModal.fields && viewTemplateSubTab === "Details" && (
+                <div className="text-center py-12">
+                  <p className="text-gray-500">No template data available.</p>
+                </div>
+              )}
             </div>
 
             {/* Modal Footer - for custom templates */}
             {viewTemplateModal.fields && !viewTemplateModal.columns && (
-              <div className="flex justify-end p-4 border-t border-gray-200">
+              <div className="flex justify-end px-6 py-4 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={handleCloseViewTemplate}
-                  className="px-6 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
+                  className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   Close
                 </button>
