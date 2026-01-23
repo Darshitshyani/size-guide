@@ -568,13 +568,22 @@ export default function CustomTailor() {
                     const res = await fetch("/api/upload", { method: "POST", body: fd });
                     const data = await res.json();
                     if (data.url) {
-                        return { ...field, image: data.url, file: undefined };
+                        // Remove file property and set image URL from upload response
+                        const { file, ...rest } = field;
+                        return { ...rest, image: data.url };
+                    } else {
+                        console.error("Upload failed: No URL returned", data);
                     }
                 } catch (e) {
                     console.error("Field upload failed", e);
                 }
             }
+            // If no file, preserve existing image URL but remove file property
             const { file, ...rest } = field;
+            // Only include image if it's not empty
+            if (rest.image === "" || rest.image === null || rest.image === undefined) {
+                delete rest.image;
+            }
             return rest;
         }));
 
@@ -586,7 +595,10 @@ export default function CustomTailor() {
         formData.append("name", templateName);
         formData.append("gender", selectedGender.charAt(0).toUpperCase() + selectedGender.slice(1));
         formData.append("clothingType", selectedPreset.id);
-        formData.append("fields", JSON.stringify(finalMeasurementFields.map(({ id, enabled, ...rest }) => rest)));
+        // Prepare fields for saving - remove id and enabled, but keep all other properties including image
+        const fieldsToSave = finalMeasurementFields.map(({ id, enabled, ...rest }) => rest);
+        console.log("Saving fields with images:", fieldsToSave.map(f => ({ name: f.name, hasImage: !!f.image, image: f.image })));
+        formData.append("fields", JSON.stringify(fieldsToSave));
         if (enableFitPreference) {
             formData.append("fitPreferences", JSON.stringify(fitPreferences));
         }
@@ -786,7 +798,12 @@ export default function CustomTailor() {
                                                 </button>
                                                 {/* Info - Info icon */}
                                                 <button
-                                                    onClick={() => setInfoModalField(field)}
+                                                    onClick={() => {
+                                                        console.log("Opening info modal for field:", field);
+                                                        console.log("Field image:", field.image);
+                                                        console.log("Field file:", field.file);
+                                                        setInfoModalField(field);
+                                                    }}
                                                     disabled={!field.enabled}
                                                     className={`p-1.5 rounded-full ${!field.enabled ? "text-gray-300 cursor-not-allowed" : "text-blue-500 hover:bg-blue-50 cursor-pointer"}`}
                                                     title="View info"
@@ -1043,18 +1060,35 @@ export default function CustomTailor() {
                             </button>
                         </div>
                         <div className="p-5 flex flex-col items-center justify-center">
-                            {infoModalField.image ? (
-                                <div className="w-[250px] h-[250px] bg-gray-50 rounded-lg mb-6 overflow-hidden border border-gray-100">
-                                    <img src={infoModalField.image} alt={infoModalField.name} className="w-full h-full object-contain" />
-                                </div>
-                            ) : (
-                                <div className="w-full h-40 bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center mb-6">
-                                    <svg className="w-12 h-12 text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                    <span className="text-sm text-gray-400">No guide image available</span>
-                                </div>
-                            )}
+                            {(() => {
+                                // Check for image URL or file object
+                                const imageUrl = infoModalField.image && infoModalField.image.trim() !== "" ? infoModalField.image : null;
+                                const hasFile = infoModalField.file ? URL.createObjectURL(infoModalField.file) : null;
+                                const displayImage = imageUrl || hasFile;
+                                
+                                console.log("Info modal - imageUrl:", imageUrl, "hasFile:", !!hasFile, "displayImage:", displayImage);
+                                
+                                return displayImage ? (
+                                    <div className="w-[250px] h-[250px] bg-gray-50 rounded-lg mb-6 overflow-hidden border border-gray-100 flex items-center justify-center">
+                                        <img 
+                                            src={displayImage} 
+                                            alt={infoModalField.name} 
+                                            className="w-full h-full object-contain"
+                                            onError={(e) => {
+                                                console.error("Image failed to load in tailor modal:", displayImage);
+                                                e.target.style.display = 'none';
+                                            }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="w-full h-40 bg-gray-50 border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center mb-6">
+                                        <svg className="w-12 h-12 text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        <span className="text-sm text-gray-400">No guide image available</span>
+                                    </div>
+                                );
+                            })()}
                             <div className="mb-6 w-full">
                                 <div className="flex items-center gap-2 mb-2">
                                     <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1213,6 +1247,14 @@ export default function CustomTailor() {
                                     // Store the file object in the field state for later upload
                                     if (editModalFile) {
                                         handleUpdateField(editModalField.id, "file", editModalFile);
+                                        // Clear any existing image URL when a new file is uploaded
+                                        // The image URL will be set from the upload response when saving the template
+                                        handleUpdateField(editModalField.id, "image", "");
+                                    } else {
+                                        // Save the image URL if it was pasted (not uploaded as file)
+                                        if (editModalField.image !== undefined && editModalField.image !== null && editModalField.image.trim() !== "") {
+                                            handleUpdateField(editModalField.id, "image", editModalField.image);
+                                        }
                                     }
 
                                     handleUpdateField(editModalField.id, "required", editModalField.required);

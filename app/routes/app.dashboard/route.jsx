@@ -1090,8 +1090,8 @@ export default function Dashboard() {
           return "Follow the standard measurement guidelines for this field.";
         };
 
-        // Get image URL
-        const imageUrl = field?.image || null;
+        // Get image URL - check for both null and empty string
+        const imageUrl = (field?.image && field.image.trim() !== "") ? field.image : null;
         
         // Get unit
         const unit = field?.unit || "in";
