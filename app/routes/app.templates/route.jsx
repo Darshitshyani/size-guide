@@ -460,6 +460,7 @@ export default function Templates() {
   const [originalEditFieldModalFile, setOriginalEditFieldModalFile] = useState(null); // Store original file state when modal opens
   const [showEditTemplateDiscardWarning, setShowEditTemplateDiscardWarning] = useState(false);
   const [showEditFieldDiscardWarning, setShowEditFieldDiscardWarning] = useState(false);
+  const [deleteFieldConfirm, setDeleteFieldConfirm] = useState(null); // { index, field } for field deletion confirmation
   const [draggedItemIndex, setDraggedItemIndex] = useState(null);
   const [reassignmentConflicts, setReassignmentConflicts] = useState(null); // Array of products with conflicts
 
@@ -3407,7 +3408,7 @@ export default function Templates() {
                         <button
                           type="button"
                           onClick={() => {
-                            setEditCustomTemplateFields(prev => prev.filter((_, i) => i !== index));
+                            setDeleteFieldConfirm({ index, field });
                           }}
                           className="p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                           title="Remove field"
@@ -3696,6 +3697,52 @@ export default function Templates() {
                 className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 cursor-pointer transition-colors"
               >
                 Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Field Confirmation Modal */}
+      {deleteFieldConfirm && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[450] flex items-center justify-center"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setDeleteFieldConfirm(null);
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Delete Measurement Field</h3>
+                <p className="text-sm text-gray-600">Are you sure you want to delete "{deleteFieldConfirm.field.name}"?</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 mb-6">This action cannot be undone. The field will be removed from this template.</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setDeleteFieldConfirm(null)}
+                className="px-4 py-2 cursor-pointer text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditCustomTemplateFields(prev => prev.filter((_, i) => i !== deleteFieldConfirm.index));
+                  setDeleteFieldConfirm(null);
+                }}
+                className="px-4 py-2 cursor-pointer text-sm font-medium text-red-500 border border-red-500 bg-red-100 rounded-md hover:bg-red-200 transition-colors"
+              >
+                Delete
               </button>
             </div>
           </div>
