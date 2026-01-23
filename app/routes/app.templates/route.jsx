@@ -302,13 +302,21 @@ export const action = async ({ request }) => {
   if (intent === "toggleStatus") {
     const id = formData.get("id");
     const isActive = formData.get("isActive") === "true";
+    const templateType = formData.get("templateType") || "table";
 
-    await prisma.template.update({
-      where: { id },
-      data: { isActive },
-    });
+    if (templateType === "custom") {
+      await prisma.tailorTemplate.update({
+        where: { id },
+        data: { isActive },
+      });
+    } else {
+      await prisma.template.update({
+        where: { id },
+        data: { isActive },
+      });
+    }
 
-    return { success: true };
+    return { success: true, templateId: id, templateType, isActive };
   }
 
   if (intent === "assignProducts") {
@@ -500,6 +508,18 @@ export default function Templates() {
       // Template deleted - remove from list
       setTemplates(prev => prev.filter(t => t.id !== fetcher.data.deletedId));
       setDeleteConfirmTemplate(null);
+    } else if (fetcher.data?.success && fetcher.data?.templateId && fetcher.data?.templateType) {
+      // Template status toggled - update in list
+      const { templateId, templateType, isActive } = fetcher.data;
+      if (templateType === "custom") {
+        setCustomTemplates(prev => prev.map(t => 
+          t.id === templateId ? { ...t, isActive, status: isActive ? "Active" : "Inactive" } : t
+        ));
+      } else {
+        setTemplates(prev => prev.map(t => 
+          t.id === templateId ? { ...t, isActive, status: isActive ? "Active" : "Inactive" } : t
+        ));
+      }
     } else if (fetcher.data?.success && fetcher.data?.assignedCount !== undefined) {
       // Products assigned - close modal and show success
       handleCloseAssignModal();
@@ -1271,11 +1291,12 @@ export default function Templates() {
   };
 
   // Toggle template status
-  const handleToggleStatus = (templateId, currentStatus) => {
+  const handleToggleStatus = (templateId, currentStatus, templateType = "table") => {
     const formData = new FormData();
     formData.append("intent", "toggleStatus");
     formData.append("id", templateId);
     formData.append("isActive", (!currentStatus).toString());
+    formData.append("templateType", templateType);
     fetcher.submit(formData, { method: "POST" });
   };
 
@@ -1544,10 +1565,13 @@ export default function Templates() {
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap">
                       <div className="flex items-center justify-center gap-2.5">
-                        <div className="relative inline-block w-10 h-5 rounded-full bg-gray-300 transition-colors duration-200">
-                          <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200"></div>
-                        </div>
-
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(template.id, template.isActive, "table")}
+                          className={`relative inline-block w-10 h-5 rounded-full transition-colors duration-200 cursor-pointer ${template.isActive ? 'bg-green-500' : 'bg-gray-300'}`}
+                        >
+                          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${template.isActive ? 'left-5.5' : 'left-0.5'}`}></div>
+                        </button>
                       </div>
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-right">
@@ -1655,9 +1679,13 @@ export default function Templates() {
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap">
                       <div className="flex items-center justify-center gap-2.5">
-                        <div className={`relative inline-block w-10 h-5 rounded-full transition-colors duration-200 ${template.isActive ? 'bg-green-500' : 'bg-gray-300'}`}>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(template.id, template.isActive, "custom")}
+                          className={`relative inline-block w-10 h-5 rounded-full transition-colors duration-200 cursor-pointer ${template.isActive ? 'bg-green-500' : 'bg-gray-300'}`}
+                        >
                           <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${template.isActive ? 'left-5.5' : 'left-0.5'}`}></div>
-                        </div>
+                        </button>
                       </div>
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-right">

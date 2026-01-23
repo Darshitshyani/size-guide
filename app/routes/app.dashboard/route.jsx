@@ -24,6 +24,7 @@ export const action = async ({ request }) => {
 
     try {
       let templateData = null;
+      let templateStatus = null;
 
       if (templateType === "table") {
         // Remove any existing table template assignment for this product ONLY
@@ -41,7 +42,7 @@ export const action = async ({ request }) => {
         // Fetch template data
         const template = await prisma.template.findUnique({
           where: { id: templateId },
-          select: { columns: true, rows: true, guideImage: true, measureDescription: true },
+          select: { columns: true, rows: true, guideImage: true, measureDescription: true, isActive: true },
         });
         if (template) {
           templateData = {
@@ -50,6 +51,7 @@ export const action = async ({ request }) => {
             guideImage: template.guideImage,
             measureDescription: template.measureDescription,
           };
+          templateStatus = template.isActive ? "Active" : "Inactive";
         }
       } else if (templateType === "custom") {
         // Remove any existing custom template assignment for this product ONLY
@@ -67,7 +69,7 @@ export const action = async ({ request }) => {
         // Fetch template data
         const template = await prisma.tailorTemplate.findUnique({
           where: { id: templateId },
-          select: { fields: true, clothingType: true, gender: true },
+          select: { fields: true, clothingType: true, gender: true, isActive: true },
         });
         if (template) {
           templateData = {
@@ -75,6 +77,7 @@ export const action = async ({ request }) => {
             clothingType: template.clothingType,
             gender: template.gender,
           };
+          templateStatus = template.isActive ? "Active" : "Inactive";
         }
       }
 
@@ -85,6 +88,7 @@ export const action = async ({ request }) => {
         templateId, 
         templateType,
         templateName,
+        templateStatus,
         templateData,
         message: `Template "${templateName}" assigned successfully!`
       };
@@ -121,6 +125,41 @@ export const action = async ({ request }) => {
     } catch (error) {
       console.error("Error removing template:", error);
       return { success: false, error: "Failed to remove template" };
+    }
+  }
+
+  // Bulk remove charts
+  if (intent === "bulkUnassignTemplates") {
+    const templateType = formData.get("templateType"); // "table" or "custom" or "all"
+
+    try {
+      let tableCount = 0;
+      let customCount = 0;
+
+      if (templateType === "table" || templateType === "all") {
+        const result = await prisma.productTemplateAssignment.deleteMany({
+          where: { shop },
+        });
+        tableCount = result.count;
+      }
+      
+      if (templateType === "custom" || templateType === "all") {
+        const result = await prisma.tailorTemplateAssignment.deleteMany({
+          where: { shop },
+        });
+        customCount = result.count;
+      }
+
+      return { 
+        success: true,
+        intent: "bulkUnassignTemplates",
+        templateType,
+        removedCount: tableCount + customCount,
+        message: `${tableCount + customCount} chart(s) removed successfully!`
+      };
+    } catch (error) {
+      console.error("Error bulk removing templates:", error);
+      return { success: false, error: "Failed to remove templates" };
     }
   }
 
@@ -177,7 +216,8 @@ export const loader = async ({ request }) => {
           columns: true, 
           rows: true, 
           guideImage: true, 
-          measureDescription: true 
+          measureDescription: true,
+          isActive: true
         } 
       } 
     },
@@ -193,7 +233,8 @@ export const loader = async ({ request }) => {
           name: true, 
           fields: true,
           clothingType: true,
-          gender: true
+          gender: true,
+          isActive: true
         } 
       } 
     },
@@ -205,6 +246,7 @@ export const loader = async ({ request }) => {
     tableAssignmentMap[a.productId] = {
       templateId: a.templateId,
       templateName: a.template.name,
+      templateStatus: a.template.isActive ? "Active" : "Inactive",
       templateData: {
         columns: JSON.parse(a.template.columns),
         rows: JSON.parse(a.template.rows),
@@ -219,6 +261,7 @@ export const loader = async ({ request }) => {
     customAssignmentMap[a.productId] = {
       templateId: a.templateId,
       templateName: a.template.name,
+      templateStatus: a.template.isActive ? "Active" : "Inactive",
       templateData: {
         fields: typeof a.template.fields === "string" ? JSON.parse(a.template.fields) : a.template.fields,
         clothingType: a.template.clothingType,
@@ -276,9 +319,11 @@ export const loader = async ({ request }) => {
         status: edge.node.status,
         tableTemplateId: tableAssignment?.templateId || null,
         tableTemplateName: tableAssignment?.templateName || null,
+        tableTemplateStatus: tableAssignment?.templateStatus || null,
         tableTemplateData: tableAssignment?.templateData || null,
         customTemplateId: customAssignment?.templateId || null,
         customTemplateName: customAssignment?.templateName || null,
+        customTemplateStatus: customAssignment?.templateStatus || null,
         customTemplateData: customAssignment?.templateData || null,
       };
     }),
@@ -320,6 +365,7 @@ export default function Dashboard() {
   const [viewTemplateUnit, setViewTemplateUnit] = useState("In");
   const [assigningTemplate, setAssigningTemplate] = useState(null); // Track which template is being assigned
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { productId, templateType } or null
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(null); // { templateType, count } or null
   const dropdownRefs = useRef({});
   const cancelChartsDropdownRef = useRef(null);
   const filtersModalRef = useRef(null);
@@ -336,56 +382,89 @@ export default function Dashboard() {
 
   // Handle assignment/unassignment success
   useEffect(() => {
-    if (fetcher.data?.success && fetcher.data?.productId) {
-      const { productId, templateId, templateType, templateName, intent } = fetcher.data;
+    if (fetcher.data?.success) {
+      const { intent, templateType } = fetcher.data;
       
-      if (intent === "assignTemplate") {
-        const { templateData } = fetcher.data;
-        // Update the products state with the new assignment - ONLY update the specific type
+      // Handle bulk unassign
+      if (intent === "bulkUnassignTemplates") {
+        // Update all products to remove assignments based on templateType
         setProducts(prev => prev.map(p => {
-          if (p.id === productId) {
-            if (templateType === "table") {
-              // Only update table template fields, preserve custom template fields
-              return { 
-                ...p, 
-                tableTemplateId: templateId, 
-                tableTemplateName: templateName, 
-                tableTemplateData: templateData 
-              };
-            } else if (templateType === "custom") {
-              // Only update custom template fields, preserve table template fields
-              return { 
-                ...p, 
-                customTemplateId: templateId, 
-                customTemplateName: templateName, 
-                customTemplateData: templateData 
-              };
-            }
+          if (templateType === "table") {
+            return { ...p, tableTemplateId: null, tableTemplateName: null, tableTemplateStatus: null, tableTemplateData: null };
+          } else if (templateType === "custom") {
+            return { ...p, customTemplateId: null, customTemplateName: null, customTemplateStatus: null, customTemplateData: null };
+          } else if (templateType === "all") {
+            return { 
+              ...p, 
+              tableTemplateId: null, 
+              tableTemplateName: null, 
+              tableTemplateStatus: null,
+              tableTemplateData: null, 
+              customTemplateId: null, 
+              customTemplateName: null, 
+              customTemplateStatus: null,
+              customTemplateData: null 
+            };
           }
           return p;
         }));
+        return;
+      }
+
+      // Handle single product assignment/unassignment
+      if (fetcher.data?.productId) {
+        const { productId, templateId, templateName } = fetcher.data;
         
-        // Close the modal and reset state
-        setSelectTemplateModal(null);
-        setAssigningTemplate(null);
-        setTemplateSearch("");
-      } else if (intent === "unassignTemplate") {
-        // Update the products state to remove the assignment
-        setProducts(prev => prev.map(p => {
-          if (p.id === productId) {
-            if (templateType === "table") {
-              return { ...p, tableTemplateId: null, tableTemplateName: null, tableTemplateData: null };
-            } else if (templateType === "custom") {
-              return { ...p, customTemplateId: null, customTemplateName: null, customTemplateData: null };
-            } else if (templateType === "all") {
-              return { ...p, tableTemplateId: null, tableTemplateName: null, tableTemplateData: null, customTemplateId: null, customTemplateName: null, customTemplateData: null };
+        if (intent === "assignTemplate") {
+          const { templateData, templateStatus } = fetcher.data;
+          // Update the products state with the new assignment - ONLY update the specific type
+          setProducts(prev => prev.map(p => {
+            if (p.id === productId) {
+              if (templateType === "table") {
+                // Only update table template fields, preserve custom template fields
+                return { 
+                  ...p, 
+                  tableTemplateId: templateId, 
+                  tableTemplateName: templateName, 
+                  tableTemplateStatus: templateStatus,
+                  tableTemplateData: templateData 
+                };
+              } else if (templateType === "custom") {
+                // Only update custom template fields, preserve table template fields
+                return { 
+                  ...p, 
+                  customTemplateId: templateId, 
+                  customTemplateName: templateName, 
+                  customTemplateStatus: templateStatus,
+                  customTemplateData: templateData 
+                };
+              }
             }
-          }
-          return p;
-        }));
-        
-        // Close dropdown
-        setOpenDropdownId(null);
+            return p;
+          }));
+          
+          // Close the modal and reset state
+          setSelectTemplateModal(null);
+          setAssigningTemplate(null);
+          setTemplateSearch("");
+        } else if (intent === "unassignTemplate") {
+          // Update the products state to remove the assignment
+          setProducts(prev => prev.map(p => {
+            if (p.id === productId) {
+              if (templateType === "table") {
+                return { ...p, tableTemplateId: null, tableTemplateName: null, tableTemplateStatus: null, tableTemplateData: null };
+              } else if (templateType === "custom") {
+                return { ...p, customTemplateId: null, customTemplateName: null, customTemplateStatus: null, customTemplateData: null };
+              } else if (templateType === "all") {
+                return { ...p, tableTemplateId: null, tableTemplateName: null, tableTemplateStatus: null, tableTemplateData: null, customTemplateId: null, customTemplateName: null, customTemplateStatus: null, customTemplateData: null };
+              }
+            }
+            return p;
+          }));
+          
+          // Close dropdown
+          setOpenDropdownId(null);
+        }
       }
     }
   }, [fetcher.data]);
@@ -422,13 +501,39 @@ export default function Dashboard() {
   };
 
   const filteredProducts = products.filter((product) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      product.id.toLowerCase().includes(query) ||
-      product.title.toLowerCase().includes(query) ||
-      product.status.toLowerCase().includes(query)
-    );
+    // Search filter
+    const matchesSearch = !searchQuery || (() => {
+      const query = searchQuery.toLowerCase();
+      return (
+        product.id.toLowerCase().includes(query) ||
+        product.title.toLowerCase().includes(query) ||
+        product.status.toLowerCase().includes(query)
+      );
+    })();
+
+    // Table Chart Status filter
+    let matchesTableChartStatus = true;
+    if (tableChartStatus === "Active") {
+      matchesTableChartStatus = product.tableTemplateStatus === "Active";
+    } else if (tableChartStatus === "Not Active") {
+      matchesTableChartStatus = product.tableTemplateStatus === "Inactive";
+    } else if (tableChartStatus === "Not Assigned") {
+      matchesTableChartStatus = !product.tableTemplateId;
+    }
+    // "All" means no filter, so matchesTableChartStatus stays true
+
+    // Custom Chart Status filter
+    let matchesCustomChartStatus = true;
+    if (customChartStatus === "Active") {
+      matchesCustomChartStatus = product.customTemplateStatus === "Active";
+    } else if (customChartStatus === "Not Active") {
+      matchesCustomChartStatus = product.customTemplateStatus === "Inactive";
+    } else if (customChartStatus === "Not Assigned") {
+      matchesCustomChartStatus = !product.customTemplateId;
+    }
+    // "All" means no filter, so matchesCustomChartStatus stays true
+
+    return matchesSearch && matchesTableChartStatus && matchesCustomChartStatus;
   });
 
   // Calculate chart counts based on actual assignments
@@ -469,21 +574,39 @@ export default function Dashboard() {
   };
 
   const handleRemoveTableCharts = () => {
-    // Handle remove table charts action
-    console.log("Remove table charts");
+    if (tableChartsCount === 0) {
+      setIsCancelChartsOpen(false);
+      return;
+    }
+    setBulkDeleteConfirm({ templateType: "table", count: tableChartsCount });
     setIsCancelChartsOpen(false);
   };
 
   const handleRemoveCustomCharts = () => {
-    // Handle remove custom charts action
-    console.log("Remove custom charts");
+    if (customChartsCount === 0) {
+      setIsCancelChartsOpen(false);
+      return;
+    }
+    setBulkDeleteConfirm({ templateType: "custom", count: customChartsCount });
     setIsCancelChartsOpen(false);
   };
 
   const handleRemoveAllCharts = () => {
-    // Handle remove all charts action
-    console.log("Remove all charts");
+    if (totalChartsCount === 0) {
+      setIsCancelChartsOpen(false);
+      return;
+    }
+    setBulkDeleteConfirm({ templateType: "all", count: totalChartsCount });
     setIsCancelChartsOpen(false);
+  };
+
+  const handleConfirmBulkDelete = () => {
+    if (!bulkDeleteConfirm) return;
+    const formData = new FormData();
+    formData.append("intent", "bulkUnassignTemplates");
+    formData.append("templateType", bulkDeleteConfirm.templateType);
+    fetcher.submit(formData, { method: "POST" });
+    setBulkDeleteConfirm(null);
   };
 
   const handleToggleFilters = (e) => {
@@ -793,7 +916,26 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredProducts.map((product) => (
+                  {filteredProducts.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="px-4 text-center" style={{ height: '400px' }}>
+                        <div className="flex flex-col items-center justify-center h-full">
+                          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <h3 className="text-base font-medium text-gray-900 mb-1">No products found</h3>
+                          <p className="text-sm text-gray-500">
+                            {products.length === 0 
+                              ? "No products available. Products will appear here once they are added to your store."
+                              : "No products match your current filters. Try adjusting your search or filter criteria."}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredProducts.map((product) => (
                     <tr key={product.id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors last:border-b-0">
                       <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
                         <input
@@ -822,26 +964,30 @@ export default function Dashboard() {
                       <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
                         <div className="flex items-center justify-center">
                           {product.tableTemplateId ? (
-                            <span className="inline-flex items-center w-fit py-1 rounded-sm border border-green-400 px-4 text-xs font-medium bg-green-100 text-green-800" title={product.tableTemplateName}>
-                              {product.tableTemplateName && product.tableTemplateName.length > 15 
-                                ? product.tableTemplateName.substring(0, 15) + '...' 
-                                : product.tableTemplateName || 'Assigned'}
+                            <span className={`inline-flex items-center w-fit py-1 rounded-sm border px-4 text-xs font-medium ${
+                              product.tableTemplateStatus === "Active" 
+                                ? "border-green-400 bg-green-100 text-green-800" 
+                                : "border-red-400 bg-red-100 text-red-800"
+                            }`} title={product.tableTemplateName}>
+                              {product.tableTemplateStatus || "Inactive"}
                             </span>
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="text-gray-400">Not Assigned</span>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
                         <div className="flex items-center justify-center">
                           {product.customTemplateId ? (
-                            <span className="inline-flex items-center px-4 py-1 text-xs w-fit rounded-sm border border-blue-400 font-medium bg-blue-100 text-blue-800" title={product.customTemplateName}>
-                              {product.customTemplateName && product.customTemplateName.length > 15 
-                                ? product.customTemplateName.substring(0, 15) + '...' 
-                                : product.customTemplateName || 'Assigned'}
+                            <span className={`inline-flex items-center px-4 py-1 text-xs w-fit rounded-sm border font-medium ${
+                              product.customTemplateStatus === "Active" 
+                                ? "border-green-400 bg-green-100 text-green-800" 
+                                : "border-red-400 bg-red-100 text-red-800"
+                            }`} title={product.customTemplateName}>
+                              {product.customTemplateStatus || "Inactive"}
                             </span>
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="text-gray-400">Not Assigned</span>
                           )}
                         </div>
                       </td>
@@ -981,7 +1127,8 @@ export default function Dashboard() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -2046,6 +2193,70 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={handleConfirm}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {bulkDeleteConfirm && (() => {
+        const { templateType, count } = bulkDeleteConfirm;
+
+        let title = "Remove All Charts";
+        let message = `Are you sure you want to remove all ${count} chart assignments?`;
+
+        if (templateType === "table") {
+          title = "Remove Table Charts";
+          message = `Are you sure you want to remove all ${count} Table Chart assignment${count !== 1 ? 's' : ''}?`;
+        } else if (templateType === "custom") {
+          title = "Remove Custom Charts";
+          message = `Are you sure you want to remove all ${count} Custom Chart assignment${count !== 1 ? 's' : ''}?`;
+        } else if (templateType === "all") {
+          title = "Remove All Charts";
+          message = `Are you sure you want to remove all ${count} chart assignment${count !== 1 ? 's' : ''}?`;
+        }
+
+        return (
+          <div
+            className="fixed inset-0 bg-black/40 z-[600] flex items-center justify-center"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setBulkDeleteConfirm(null);
+              }
+            }}
+          >
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+                <button
+                  type="button"
+                  onClick={() => setBulkDeleteConfirm(null)}
+                  className="p-1.5 hover:bg-gray-100 rounded-full"
+                >
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="px-5 py-4">
+                <p className="text-sm text-gray-700">{message}</p>
+              </div>
+              <div className="px-5 py-3 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setBulkDeleteConfirm(null)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmBulkDelete}
                   className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
                 >
                   Remove
