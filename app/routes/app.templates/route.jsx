@@ -457,6 +457,7 @@ export default function Templates() {
   // Edit Field Modal state (within Edit Custom Template)
   const [editFieldModal, setEditFieldModal] = useState(null); // { index, field } being edited
   const [editFieldModalFile, setEditFieldModalFile] = useState(null); // Pending file upload
+  const [originalEditFieldModalFile, setOriginalEditFieldModalFile] = useState(null); // Store original file state when modal opens
   const [showEditTemplateDiscardWarning, setShowEditTemplateDiscardWarning] = useState(false);
   const [showEditFieldDiscardWarning, setShowEditFieldDiscardWarning] = useState(false);
   const [draggedItemIndex, setDraggedItemIndex] = useState(null);
@@ -916,10 +917,11 @@ export default function Templates() {
     if (normalize(field.range) !== normalize(originalField.range)) return true;
     if (normalizeBool(field.required) !== normalizeBool(originalField.required)) return true;
 
-    // Check pending file upload
-    if (editFieldModalFile) return true;
     // Check if image URL changed (e.g. cleared)
     if (normalize(field.image) !== normalize(originalField.image)) return true;
+
+    // Check if file changed - compare current file with original file
+    if (editFieldModalFile !== originalEditFieldModalFile) return true;
 
     return false;
   };
@@ -935,6 +937,7 @@ export default function Templates() {
   const handleCloseEditFieldModal = () => {
     setEditFieldModal(null);
     setEditFieldModalFile(null);
+    setOriginalEditFieldModalFile(null);
     setShowEditFieldDiscardWarning(false);
   };
 
@@ -3354,9 +3357,11 @@ export default function Templates() {
                         <button
                           type="button"
                           onClick={() => {
-                            // Open Edit Field Modal
+                            // Open Edit Field Modal - store original field and file state for comparison
+                            const originalFile = field.file || null;
                             setEditFieldModal({ index, field: { ...field }, originalField: { ...field } });
-                            setEditFieldModalFile(null);
+                            setOriginalEditFieldModalFile(originalFile);
+                            setEditFieldModalFile(originalFile);
                           }}
                           className="p-1.5 rounded-full text-yellow-600 hover:bg-yellow-50 transition-colors cursor-pointer"
                           title="Edit field"
@@ -3821,14 +3826,25 @@ export default function Templates() {
                   // Store file on field for deferred upload (will upload on Update Template)
                   if (editFieldModalFile) {
                     finalField.file = editFieldModalFile;
+                    // Clear any existing image URL when a new file is uploaded
+                    // The image URL will be set from the upload response when saving the template
+                    finalField.image = "";
+                  } else {
+                    // Preserve the image URL if no new file is uploaded
+                    // Ensure image is explicitly included even if it's empty
+                    if (editFieldModal.field.image !== undefined) {
+                      finalField.image = editFieldModal.field.image;
+                    }
                   }
 
                   // Update field in the list
                   setEditCustomTemplateFields(prev =>
                     prev.map((f, i) => i === editFieldModal.index ? { ...f, ...finalField, isEditing: false } : f)
                   );
+                  // Close modal and reset all states after saving
                   setEditFieldModal(null);
                   setEditFieldModalFile(null);
+                  setOriginalEditFieldModalFile(null);
                 }}
                 className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 cursor-pointer transition-colors"
               >

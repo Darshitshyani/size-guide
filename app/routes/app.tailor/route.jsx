@@ -260,6 +260,8 @@ export default function CustomTailor() {
     const [infoModalField, setInfoModalField] = useState(null);
     const [editModalField, setEditModalField] = useState(null);
     const [editModalFile, setEditModalFile] = useState(null);
+    const [originalEditModalField, setOriginalEditModalField] = useState(null); // Store original field state when modal opens
+    const [originalEditModalFile, setOriginalEditModalFile] = useState(null); // Store original file state when modal opens
     const [assignModalTemplate, setAssignModalTemplate] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [selectedProducts, setSelectedProducts] = useState([]);
@@ -483,32 +485,46 @@ export default function CustomTailor() {
         if (forceClose) {
             setEditModalField(null);
             setEditModalFile(null);
+            setOriginalEditModalField(null);
+            setOriginalEditModalFile(null);
             setShowEditDiscardWarning(false);
             return;
         }
 
-        // Find original field
-        const originalField = measurementFields.find(f => f.id === editModalField.id);
-        if (!originalField) {
+        // Use the stored original field for comparison, not the current field from measurementFields
+        // This ensures that after saving and reopening, we compare against the saved state
+        if (!originalEditModalField) {
             setEditModalField(null);
+            setEditModalFile(null);
+            setOriginalEditModalField(null);
+            setOriginalEditModalFile(null);
             return;
         }
 
-        // Check for changes
+        // Helper function to normalize values for comparison
+        const normalize = (val) => {
+            if (val === null || val === undefined) return "";
+            return String(val).trim();
+        };
+
+        // Check for changes by comparing with the original field state when modal was opened
+        // Normalize values to handle empty strings, null, undefined consistently
         const hasChanges =
-            originalField.name !== editModalField.name ||
-            originalField.unit !== editModalField.unit ||
-            originalField.range !== editModalField.range ||
-            originalField.instruction !== editModalField.instruction ||
-            originalField.required !== editModalField.required ||
-            originalField.image !== editModalField.image ||
-            editModalFile !== (originalField.file || null);
+            normalize(originalEditModalField.name) !== normalize(editModalField.name) ||
+            normalize(originalEditModalField.unit) !== normalize(editModalField.unit) ||
+            normalize(originalEditModalField.range) !== normalize(editModalField.range) ||
+            normalize(originalEditModalField.instruction) !== normalize(editModalField.instruction) ||
+            Boolean(originalEditModalField.required) !== Boolean(editModalField.required) ||
+            normalize(originalEditModalField.image) !== normalize(editModalField.image) ||
+            editModalFile !== originalEditModalFile;
 
         if (hasChanges) {
             setShowEditDiscardWarning(true);
         } else {
             setEditModalField(null);
             setEditModalFile(null);
+            setOriginalEditModalField(null);
+            setOriginalEditModalFile(null);
         }
     };
 
@@ -815,10 +831,13 @@ export default function CustomTailor() {
                                                 {/* Edit - Pencil icon */}
                                                 <button
                                                     onClick={() => {
+                                                        // Store the original field state for comparison
+                                                        setOriginalEditModalField({ ...field });
                                                         setEditModalField({ ...field });
-                                                        if (field.file) {
-                                                            setEditModalFile(field.file);
-                                                        }
+                                                        // Store the original file state for comparison
+                                                        const originalFile = field.file || null;
+                                                        setOriginalEditModalFile(originalFile);
+                                                        setEditModalFile(originalFile);
                                                     }}
                                                     disabled={!field.enabled}
                                                     className={`p-1.5 rounded-full ${!field.enabled ? "text-gray-300 cursor-not-allowed" : "text-amber-500 hover:bg-amber-50 cursor-pointer"}`}
@@ -1258,8 +1277,11 @@ export default function CustomTailor() {
                                     }
 
                                     handleUpdateField(editModalField.id, "required", editModalField.required);
+                                    // Close modal and reset states after saving
                                     setEditModalField(null);
                                     setEditModalFile(null);
+                                    setOriginalEditModalField(null);
+                                    setOriginalEditModalFile(null);
                                 }}
                                 className="px-5 py-2 text-sm font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 cursor-pointer"
                             >
