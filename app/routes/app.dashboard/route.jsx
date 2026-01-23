@@ -1,8 +1,131 @@
 import { useState, useRef, useEffect } from "react";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useFetcher } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../../shopify.server";
 import prisma from "../../db.server";
+
+// Action handler for assigning templates to products
+export const action = async ({ request }) => {
+  const { session } = await authenticate.admin(request);
+  const shop = session.shop;
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  if (intent === "assignTemplate") {
+    const templateId = formData.get("templateId");
+    const templateType = formData.get("templateType"); // "table" or "custom"
+    const productId = formData.get("productId");
+    const templateName = formData.get("templateName");
+
+    // Validate templateType
+    if (templateType !== "table" && templateType !== "custom") {
+      return { success: false, error: "Invalid template type" };
+    }
+
+    try {
+      let templateData = null;
+
+      if (templateType === "table") {
+        // Remove any existing table template assignment for this product ONLY
+        await prisma.productTemplateAssignment.deleteMany({
+          where: { shop, productId },
+        });
+        // Create new table template assignment ONLY
+        await prisma.productTemplateAssignment.create({
+          data: {
+            shop,
+            productId,
+            templateId,
+          },
+        });
+        // Fetch template data
+        const template = await prisma.template.findUnique({
+          where: { id: templateId },
+          select: { columns: true, rows: true, guideImage: true, measureDescription: true },
+        });
+        if (template) {
+          templateData = {
+            columns: JSON.parse(template.columns),
+            rows: JSON.parse(template.rows),
+            guideImage: template.guideImage,
+            measureDescription: template.measureDescription,
+          };
+        }
+      } else if (templateType === "custom") {
+        // Remove any existing custom template assignment for this product ONLY
+        await prisma.tailorTemplateAssignment.deleteMany({
+          where: { shop, productId },
+        });
+        // Create new custom template assignment ONLY
+        await prisma.tailorTemplateAssignment.create({
+          data: {
+            shop,
+            productId,
+            templateId,
+          },
+        });
+        // Fetch template data
+        const template = await prisma.tailorTemplate.findUnique({
+          where: { id: templateId },
+          select: { fields: true, clothingType: true, gender: true },
+        });
+        if (template) {
+          templateData = {
+            fields: typeof template.fields === "string" ? JSON.parse(template.fields) : template.fields,
+            clothingType: template.clothingType,
+            gender: template.gender,
+          };
+        }
+      }
+
+      return { 
+        success: true,
+        intent: "assignTemplate",
+        productId, 
+        templateId, 
+        templateType,
+        templateName,
+        templateData,
+        message: `Template "${templateName}" assigned successfully!`
+      };
+    } catch (error) {
+      console.error("Error assigning template:", error);
+      return { success: false, error: "Failed to assign template" };
+    }
+  }
+
+  if (intent === "unassignTemplate") {
+    const templateType = formData.get("templateType"); // "table" or "custom" or "all"
+    const productId = formData.get("productId");
+
+    try {
+      if (templateType === "table" || templateType === "all") {
+        await prisma.productTemplateAssignment.deleteMany({
+          where: { shop, productId },
+        });
+      }
+      
+      if (templateType === "custom" || templateType === "all") {
+        await prisma.tailorTemplateAssignment.deleteMany({
+          where: { shop, productId },
+        });
+      }
+
+      return { 
+        success: true,
+        intent: "unassignTemplate",
+        productId, 
+        templateType,
+        message: `Chart${templateType === "all" ? "s" : ""} removed successfully!`
+      };
+    } catch (error) {
+      console.error("Error removing template:", error);
+      return { success: false, error: "Failed to remove template" };
+    }
+  }
+
+  return { success: false, error: "Unknown intent" };
+};
 
 export const loader = async ({ request }) => {
   const { session, admin } = await authenticate.admin(request);
@@ -43,6 +166,67 @@ export const loader = async ({ request }) => {
     fields: typeof template.fields === "string" ? JSON.parse(template.fields) : template.fields,
   }));
 
+  // Fetch existing table template assignments with full template data
+  const tableAssignments = await prisma.productTemplateAssignment.findMany({
+    where: { shop },
+    include: { 
+      template: { 
+        select: { 
+          id: true, 
+          name: true, 
+          columns: true, 
+          rows: true, 
+          guideImage: true, 
+          measureDescription: true 
+        } 
+      } 
+    },
+  });
+
+  // Fetch existing custom template assignments with full template data
+  const customAssignments = await prisma.tailorTemplateAssignment.findMany({
+    where: { shop },
+    include: { 
+      template: { 
+        select: { 
+          id: true, 
+          name: true, 
+          fields: true,
+          clothingType: true,
+          gender: true
+        } 
+      } 
+    },
+  });
+
+  // Create assignment maps with full template data
+  const tableAssignmentMap = {};
+  tableAssignments.forEach((a) => {
+    tableAssignmentMap[a.productId] = {
+      templateId: a.templateId,
+      templateName: a.template.name,
+      templateData: {
+        columns: JSON.parse(a.template.columns),
+        rows: JSON.parse(a.template.rows),
+        guideImage: a.template.guideImage,
+        measureDescription: a.template.measureDescription,
+      },
+    };
+  });
+
+  const customAssignmentMap = {};
+  customAssignments.forEach((a) => {
+    customAssignmentMap[a.productId] = {
+      templateId: a.templateId,
+      templateName: a.template.name,
+      templateData: {
+        fields: typeof a.template.fields === "string" ? JSON.parse(a.template.fields) : a.template.fields,
+        clothingType: a.template.clothingType,
+        gender: a.template.gender,
+      },
+    };
+  });
+
   // Fetch products from Shopify
   const response = await admin.graphql(
     `#graphql
@@ -74,6 +258,8 @@ export const loader = async ({ request }) => {
     products: products.map((edge) => {
       const productId = edge.node.id.split("/").pop() || "";
       const numericId = productId.replace(/\D/g, "") || productId;
+      const tableAssignment = tableAssignmentMap[productId];
+      const customAssignment = customAssignmentMap[productId];
 
       return {
         id: productId,
@@ -88,6 +274,12 @@ export const loader = async ({ request }) => {
           year: "numeric",
         }),
         status: edge.node.status,
+        tableTemplateId: tableAssignment?.templateId || null,
+        tableTemplateName: tableAssignment?.templateName || null,
+        tableTemplateData: tableAssignment?.templateData || null,
+        customTemplateId: customAssignment?.templateId || null,
+        customTemplateName: customAssignment?.templateName || null,
+        customTemplateData: customAssignment?.templateData || null,
       };
     }),
   };
@@ -95,6 +287,8 @@ export const loader = async ({ request }) => {
 
 export default function Dashboard() {
   const { products: initialProducts, templates, customTemplates } = useLoaderData();
+  const fetcher = useFetcher();
+  const [products, setProducts] = useState(initialProducts);
   const [activeTab, setActiveTab] = useState("products");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProducts, setSelectedProducts] = useState([]);
@@ -120,14 +314,114 @@ export default function Dashboard() {
   const [selectTemplateModal, setSelectTemplateModal] = useState(null);
   const [templateTab, setTemplateTab] = useState("Table Template");
   const [templateSearch, setTemplateSearch] = useState("");
+  const [restrictedTemplateType, setRestrictedTemplateType] = useState(null); // "table" or "custom" or null
   const [viewTemplateModal, setViewTemplateModal] = useState(null); // Template object to view
   const [viewTemplateSubTab, setViewTemplateSubTab] = useState("Details");
   const [viewTemplateUnit, setViewTemplateUnit] = useState("In");
+  const [assigningTemplate, setAssigningTemplate] = useState(null); // Track which template is being assigned
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { productId, templateType } or null
   const dropdownRefs = useRef({});
   const cancelChartsDropdownRef = useRef(null);
   const filtersModalRef = useRef(null);
 
-  const filteredProducts = initialProducts.filter((product) => {
+  // Sync products when initialProducts changes
+  useEffect(() => {
+    setProducts(initialProducts);
+  }, [initialProducts]);
+
+  const selectedProduct =
+    selectTemplateModal != null
+      ? products.find((p) => p.id === selectTemplateModal)
+      : null;
+
+  // Handle assignment/unassignment success
+  useEffect(() => {
+    if (fetcher.data?.success && fetcher.data?.productId) {
+      const { productId, templateId, templateType, templateName, intent } = fetcher.data;
+      
+      if (intent === "assignTemplate") {
+        const { templateData } = fetcher.data;
+        // Update the products state with the new assignment - ONLY update the specific type
+        setProducts(prev => prev.map(p => {
+          if (p.id === productId) {
+            if (templateType === "table") {
+              // Only update table template fields, preserve custom template fields
+              return { 
+                ...p, 
+                tableTemplateId: templateId, 
+                tableTemplateName: templateName, 
+                tableTemplateData: templateData 
+              };
+            } else if (templateType === "custom") {
+              // Only update custom template fields, preserve table template fields
+              return { 
+                ...p, 
+                customTemplateId: templateId, 
+                customTemplateName: templateName, 
+                customTemplateData: templateData 
+              };
+            }
+          }
+          return p;
+        }));
+        
+        // Close the modal and reset state
+        setSelectTemplateModal(null);
+        setAssigningTemplate(null);
+        setTemplateSearch("");
+      } else if (intent === "unassignTemplate") {
+        // Update the products state to remove the assignment
+        setProducts(prev => prev.map(p => {
+          if (p.id === productId) {
+            if (templateType === "table") {
+              return { ...p, tableTemplateId: null, tableTemplateName: null, tableTemplateData: null };
+            } else if (templateType === "custom") {
+              return { ...p, customTemplateId: null, customTemplateName: null, customTemplateData: null };
+            } else if (templateType === "all") {
+              return { ...p, tableTemplateId: null, tableTemplateName: null, tableTemplateData: null, customTemplateId: null, customTemplateName: null, customTemplateData: null };
+            }
+          }
+          return p;
+        }));
+        
+        // Close dropdown
+        setOpenDropdownId(null);
+      }
+    }
+  }, [fetcher.data]);
+
+  // Handle template assignment
+  const handleAssignTemplate = (template, templateType) => {
+    if (!selectTemplateModal) return;
+    
+    setAssigningTemplate(template.id);
+    
+    const formData = new FormData();
+    formData.append("intent", "assignTemplate");
+    formData.append("templateId", template.id);
+    formData.append("templateType", templateType);
+    formData.append("productId", selectTemplateModal);
+    formData.append("templateName", template.name);
+    
+    fetcher.submit(formData, { method: "POST" });
+  };
+
+  // Handle template unassignment
+  const handleUnassignTemplate = (productId, templateType) => {
+    const formData = new FormData();
+    formData.append("intent", "unassignTemplate");
+    formData.append("templateType", templateType);
+    formData.append("productId", productId);
+    
+    fetcher.submit(formData, { method: "POST" });
+  };
+
+  // Show confirmation before unassigning templates (via custom modal)
+  const handleConfirmUnassign = (productId, templateType) => {
+    setDeleteConfirm({ productId, templateType });
+  };
+
+  const filteredProducts = products.filter((product) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -137,9 +431,9 @@ export default function Dashboard() {
     );
   });
 
-  // Calculate chart counts
-  const tableChartsCount = filteredProducts.filter(p => p.numericId % 3 === 0).length;
-  const customChartsCount = filteredProducts.filter(p => p.numericId % 5 === 0).length;
+  // Calculate chart counts based on actual assignments
+  const tableChartsCount = filteredProducts.filter(p => p.tableTemplateId).length;
+  const customChartsCount = filteredProducts.filter(p => p.customTemplateId).length;
   const totalChartsCount = tableChartsCount + customChartsCount;
 
   const handleSelectAll = (e) => {
@@ -205,13 +499,22 @@ export default function Dashboard() {
     setCustomChartStatus(status);
   };
 
-  const handleOpenViewModal = (productId, e) => {
+  const handleOpenViewModal = (productId, e, preferredTab) => {
     if (e) {
       e.stopPropagation();
     }
-    console.log("Opening modal for product:", productId);
+    const product = products.find(p => p.id === productId);
+    // Set initial tab based on preferredTab or available templates
+    if (preferredTab) {
+      setModalMainTab(preferredTab);
+    } else if (product?.tableTemplateId && product?.tableTemplateData) {
+      setModalMainTab("Table Chart");
+    } else if (product?.customTemplateId && product?.customTemplateData) {
+      setModalMainTab("Custom Size");
+    } else {
+      setModalMainTab("Table Chart"); // Default fallback
+    }
     setViewModalProductId(productId);
-    setModalMainTab("Table Chart");
     setModalSubTab("Details");
     setModalUnit("In");
   };
@@ -236,13 +539,29 @@ export default function Dashboard() {
     if (e) {
       e.stopPropagation();
     }
+    // Default to Table Template tab, no restriction
     setSelectTemplateModal(productId);
     setTemplateTab("Table Template");
     setTemplateSearch("");
+    setRestrictedTemplateType(null);
+  };
+
+  const handleOpenSelectTemplateForType = (productId, type, e) => {
+    if (e) {
+      e.stopPropagation();
+    }
+
+    setSelectTemplateModal(productId);
+    setTemplateTab(type === "custom" ? "Custom Size Template" : "Table Template");
+    setTemplateSearch("");
+    setOpenDropdownId(null);
+    // Restrict to the selected type
+    setRestrictedTemplateType(type);
   };
 
   const handleCloseSelectTemplate = () => {
     setSelectTemplateModal(null);
+    setRestrictedTemplateType(null);
   };
 
   const handleOpenViewTemplate = (template, e) => {
@@ -502,8 +821,12 @@ export default function Dashboard() {
                       <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap text-center w-fit">{product.date}</td>
                       <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
                         <div className="flex items-center justify-center">
-                          {product.numericId % 3 === 0 ? (
-                            <span className="inline-flex items-center w-fit  py-1 rounded-sm border border-yellow-400 px-4 text-xs font-medium bg-yellow-100 text-yellow-800">Not Active</span>
+                          {product.tableTemplateId ? (
+                            <span className="inline-flex items-center w-fit py-1 rounded-sm border border-green-400 px-4 text-xs font-medium bg-green-100 text-green-800" title={product.tableTemplateName}>
+                              {product.tableTemplateName && product.tableTemplateName.length > 15 
+                                ? product.tableTemplateName.substring(0, 15) + '...' 
+                                : product.tableTemplateName || 'Assigned'}
+                            </span>
                           ) : (
                             <span className="text-gray-400">-</span>
                           )}
@@ -511,8 +834,12 @@ export default function Dashboard() {
                       </td>
                       <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
                         <div className="flex items-center justify-center">
-                          {product.numericId % 5 === 0 ? (
-                            <span className="inline-flex items-center px-2.5 px-4 py-1 text-xs w-fit rounded-sm border border-green-400 font-medium bg-green-100 text-green-800">✓ Active</span>
+                          {product.customTemplateId ? (
+                            <span className="inline-flex items-center px-4 py-1 text-xs w-fit rounded-sm border border-blue-400 font-medium bg-blue-100 text-blue-800" title={product.customTemplateName}>
+                              {product.customTemplateName && product.customTemplateName.length > 15 
+                                ? product.customTemplateName.substring(0, 15) + '...' 
+                                : product.customTemplateName || 'Assigned'}
+                            </span>
                           ) : (
                             <span className="text-gray-400">-</span>
                           )}
@@ -520,65 +847,137 @@ export default function Dashboard() {
                       </td>
                       <td className="px-4 py-2 text-sm text-gray-900 whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2.5 relative">
-                          {(product.numericId % 3 === 0 || product.numericId % 5 === 0) ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={(e) => handleOpenViewModal(product.id, e)}
-                                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-white text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-100  cursor-pointer shadow-sm hover:shadow-md transition-all duration-200 ease-in-out focus:outline-none"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                                View
-                              </button>
-                              <div className="relative">
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleToggleDropdown(product.id, e)}
-                                  className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-red-100 text-red-500 rounded-lg hover:bg-red-200 active:bg-red-300 border border-red-300 cursor-pointer shadow-sm hover:shadow-md transition-all duration-200 ease-in-out focus:outline-none"
-                                >
-                                  Cancel Chart
-                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                                  </svg>
-                                </button>
-                                {openDropdownId === product.id && (
-                                  <div
-                                    ref={(el) => (dropdownRefs.current[product.id] = el)}
-                                    className="absolute right-0 top-full mt-1 w-64 bg-white rounded-md shadow-lg border border-gray-200 z-50"
-                                    style={{ marginTop: '4px' }}
-                                  >
-                                    <div>
-                                      <div className="cursor-pointer hover:text-red-700 hover:bg-red-50 px-4 py-2 transition-colors">
-                                        <h3 className="text-sm font-semibold text-gray-900 mb-1">Remove Table Chart</h3>
-                                        <p className="text-xs text-gray-500 ">1 chart</p>
-                                      </div>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveCharts(product.id)}
-                                        className="w-full cursor-pointer text-left p-4 text-sm text-red-600 hover:text-red-700 hover:bg-red-50  transition-colors"
-                                      >
-                                        Remove All Charts (1)
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </>
-                          ) : (
+                          <div className="relative">
                             <button
                               type="button"
-                              onClick={(e) => handleOpenSelectTemplate(product.id, e)}
-                              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium  text-gray-600 rounded-lg hover:bg-gray-100 active:bg-gray-300 border border-gray-300 cursor-pointer  hover:shadow-md transition-all duration-200 ease-in-out focus:outline-none"
+                              onClick={(e) => handleToggleDropdown(product.id, e)}
+                              className="flex items-center justify-center w-9 h-9 rounded-full border border-gray-300 bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900 cursor-pointer shadow-sm hover:shadow-md transition-all duration-200 ease-in-out focus:outline-none"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 5.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 5.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3z" />
                               </svg>
-                              Set Chart
                             </button>
-                          )}
+                            {openDropdownId === product.id && (
+                              <div
+                                ref={(el) => (dropdownRefs.current[product.id] = el)}
+                                className="absolute right-0 top-full mt-1 w-56 bg-white rounded-md shadow-lg border border-gray-200 z-50"
+                                style={{ marginTop: '4px' }}
+                              >
+                                <div className="py-1 flex flex-col">
+                                  {/* Table Chart Section */}
+                                  {product.tableTemplateId ? (
+                                    <>
+                                      {/* View Table Chart Button */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          handleOpenViewModal(product.id, e, "Table Chart");
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-3 text-sm text-gray-900 hover:bg-gray-50 flex items-center gap-2 cursor-pointer"
+                                      >
+                                        <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                        <span>View Table Chart</span>
+                                      </button>
+                                      
+                                      {/* Delete Table Chart Button */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleConfirmUnassign(product.id, "table");
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-3 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-2 cursor-pointer"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 7h12M10 11v6m4-6v6M9 7l1-2h4l1 2m-1 13H8a2 2 0 01-2-2V7h12v11a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <span>Delete Table Chart</span>
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleOpenSelectTemplateForType(product.id, "table", e)}
+                                      className="w-full text-left px-4 py-3 text-sm text-gray-800 hover:bg-gray-50 flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <span className="text-lg leading-none">+</span>
+                                      <span>Set Table Chart</span>
+                                    </button>
+                                  )}
+
+                                  <div className="h-px bg-gray-200 mx-4" />
+
+                                  {/* Custom Chart Section */}
+                                  {product.customTemplateId ? (
+                                    <>
+                                      {/* View Custom Chart Button */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          handleOpenViewModal(product.id, e, "Custom Size");
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-3 text-sm text-gray-900 hover:bg-gray-50 flex items-center gap-2 cursor-pointer"
+                                      >
+                                        <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                        <span>View Custom Chart</span>
+                                      </button>
+                                      
+                                      {/* Delete Custom Chart Button */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleConfirmUnassign(product.id, "custom");
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-3 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-2 cursor-pointer"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 7h12M10 11v6m4-6v6M9 7l1-2h4l1 2m-1 13H8a2 2 0 01-2-2V7h12v11a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <span>Delete Custom Chart</span>
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleOpenSelectTemplateForType(product.id, "custom", e)}
+                                      className="w-full text-left px-4 py-3 text-sm text-gray-800 hover:bg-gray-50 flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <span className="text-lg leading-none">+</span>
+                                      <span>Set Custom Chart</span>
+                                    </button>
+                                  )}
+
+                                  {/* Cancel All Charts - only when both exist */}
+                                  {product.tableTemplateId && product.customTemplateId && (
+                                    <>
+                                      <div className="h-px bg-gray-200 mx-4" />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleConfirmUnassign(product.id, "all")}
+                                        className="w-full text-left px-4 py-3 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-2 cursor-pointer font-medium"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 7h12M10 11v6m4-6v6M9 7l1-2h4l1 2m-1 13H8a2 2 0 01-2-2V7h12v11a2 2 0 01-2 2z" />
+                                        </svg>
+                                        <span>Cancel All Charts</span>
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -597,7 +996,22 @@ export default function Dashboard() {
       </div>
 
       {/* Size Chart Modal */}
-      {viewModalProductId && (
+      {viewModalProductId && (() => {
+        const currentProduct = products.find(p => p.id === viewModalProductId);
+        const hasTableTemplate = currentProduct?.tableTemplateId && currentProduct?.tableTemplateData;
+        const hasCustomTemplate = currentProduct?.customTemplateId && currentProduct?.customTemplateData;
+        const tableData = currentProduct?.tableTemplateData;
+        const customData = currentProduct?.customTemplateData;
+        
+        // Determine available tabs based on assignments
+        const availableTabs = [];
+        if (hasTableTemplate) availableTabs.push("Table Chart");
+        if (hasCustomTemplate) availableTabs.push("Custom Size");
+        
+        // Auto-select first available tab if current is not available
+        const effectiveMainTab = availableTabs.includes(modalMainTab) ? modalMainTab : availableTabs[0];
+        
+        return (
         <div
           className="fixed inset-0 bg-black/30 z-[100] flex items-center justify-center"
           onClick={(e) => {
@@ -609,54 +1023,52 @@ export default function Dashboard() {
           <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between gap-6 flex-1">
-                <h2 className="text-xl font-bold text-gray-900">Size Chart</h2>
-
-                {/* Main Tabs */}
-                <div className="flex gap-2">
-                  {["Table Chart", "Custom Size"].map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setModalMainTab(tab)}
-                      className={`px-4 py-2 text-sm font-medium cursor-pointer rounded-lg transition-colors ${modalMainTab === tab
-                        ? "bg-gray-800 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
+              <div className="flex items-center gap-4">
+                {/* Product Info */}
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
                 </div>
-
-                {/* Unit Toggle */}
-                <div className="flex gap-2 ml-auto">
-                  {["In", "cm"].map((unit) => (
-                    <button
-                      key={unit}
-                      type="button"
-                      onClick={() => setModalUnit(unit)}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${modalUnit === unit
-                        ? "bg-gray-800 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
-                    >
-                      {unit}
-                    </button>
-                  ))}
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">{currentProduct?.title || "Product"}</h2>
+                  <p className="text-sm text-gray-500">
+                    {currentProduct?.customTemplateData?.gender || "Male"} • {currentProduct?.customTemplateData?.clothingType || "shirt"}
+                  </p>
                 </div>
               </div>
 
-              {/* Close Button */}
-              <button
-                type="button"
-                onClick={handleCloseViewModal}
-                className="ml-4 p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-4">
+                {/* Unit Toggle - only show for Table Chart */}
+                {effectiveMainTab === "Table Chart" && (
+                  <div className="flex gap-2">
+                    {["In", "cm"].map((unit) => (
+                      <button
+                        key={unit}
+                        type="button"
+                        onClick={() => setModalUnit(unit)}
+                        className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${modalUnit === unit
+                          ? "bg-gray-800 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                      >
+                        {unit}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={handleCloseViewModal}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {/* Sub-Tabs - Fixed */}
@@ -680,395 +1092,209 @@ export default function Dashboard() {
 
             {/* Modal Content - Scrollable */}
             <div className="flex-1 overflow-auto p-6">
+              {/* No templates assigned */}
+              {availableTabs.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Templates Assigned</h3>
+                  <p className="text-gray-500 text-center">Assign a Table Chart or Custom Template to this product to view size details.</p>
+                </div>
+              )}
+
               {/* Table Chart Content */}
-              {modalMainTab === "Table Chart" && modalSubTab === "Details" && (
+              {effectiveMainTab === "Table Chart" && modalSubTab === "Details" && hasTableTemplate && (
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Chart 2</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse border border-gray-200">
-                      <thead>
-                        <tr className="bg-gray-50">
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border border-gray-200">Size</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border border-gray-200">Waist ({modalUnit})</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border border-gray-200">Hip ({modalUnit})</th>
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border border-gray-200">Inseam ({modalUnit})</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[
-                          { size: "S", waist: 28, hip: 35, inseam: 33 },
-                          { size: "M", waist: 30, hip: 37, inseam: 33 },
-                          { size: "L", waist: 32, hip: 39, inseam: 33 },
-                          { size: "XL", waist: 34, hip: 41, inseam: 33 },
-                          { size: "XXL", waist: 36, hip: 43, inseam: 33 },
-                          { size: "2XL", waist: 38, hip: 45, inseam: 33 },
-                        ].map((row) => (
-                          <tr key={row.size} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 text-sm text-gray-900 border border-gray-200">{row.size}</td>
-                            <td className="px-4 py-3 text-sm text-gray-900 border border-gray-200">{row.waist}</td>
-                            <td className="px-4 py-3 text-sm text-gray-900 border border-gray-200">{row.hip}</td>
-                            <td className="px-4 py-3 text-sm text-gray-900 border border-gray-200">{row.inseam}</td>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">{currentProduct?.tableTemplateName}</h3>
+                  {(!tableData?.columns || tableData.columns.length === 0 || !tableData?.rows || tableData.rows.length === 0) ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No data available for this chart.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse border border-gray-200">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            {tableData.columns.map((col, colIndex) => {
+                              const columnLabel = col.label || col.name || "";
+                              const displayLabel = colIndex > 0 
+                                ? columnLabel.replace(/\(in\)|\(cm\)/gi, `(${modalUnit})`)
+                                : columnLabel;
+                              return (
+                                <th key={col.key || colIndex} className="px-4 py-3 text-left text-sm font-semibold text-gray-700 border border-gray-200">
+                                  {displayLabel}
+                                </th>
+                              );
+                            })}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {tableData.rows.map((row, rowIndex) => (
+                            <tr key={rowIndex} className="hover:bg-gray-50">
+                              {tableData.columns.map((col, colIndex) => {
+                                const columnKey = col.key || col.name;
+                                return (
+                                  <td key={col.key || colIndex} className="px-4 py-3 text-sm text-gray-900 border border-gray-200">
+                                    {row[columnKey] !== undefined && row[columnKey] !== null && row[columnKey] !== "" ? row[columnKey] : "-"}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Custom Size - Details Content */}
-              {modalMainTab === "Custom Size" && modalSubTab === "Details" && (
+              {effectiveMainTab === "Custom Size" && modalSubTab === "Details" && hasCustomTemplate && (
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Enter Your Measurements</h3>
-
                   <div className="space-y-4">
-                    {/* Chest / Bust */}
-                    <div className="flex items-start gap-3">
-
-                      <div className="flex-1">
-                        <label className=" flex items-center gap-2 mb-2 text-sm font-medium text-gray-700 mb-1">
-                          <span onClick={(e) => handleOpenMeasurementInfo("Chest / Bust", e)} className="cursor-pointer"> <div className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors">
-                            <span className="text-xs text-gray-600 font-semibold">i</span>
-                          </div></span> Chest / Bust <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Enter chest / bust"
-                          value={customMeasurements.chest}
-                          onChange={(e) => setCustomMeasurements({ ...customMeasurements, chest: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
-                        />
+                    {customData?.fields?.map((field, index) => (
+                      <div key={index} className="flex items-start gap-3">
+                        <div className="flex-1">
+                          <label className="flex items-center gap-2 mb-2 text-sm font-medium text-gray-700">
+                            <span onClick={(e) => handleOpenMeasurementInfo(field, e)} className="cursor-pointer">
+                              <div className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors">
+                                <span className="text-xs text-gray-600 font-semibold">i</span>
+                              </div>
+                            </span>
+                            {field.name} {field.required !== false && <span className="text-red-500">*</span>}
+                          </label>
+                          <input
+                            type="text"
+                            placeholder={`Enter ${field.name.toLowerCase()}`}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                          />
+                        </div>
                       </div>
-                    </div>
-
-                    {/* Waist */}
-                    <div className="flex items-start gap-3">
-
-                      <div className="flex-1">
-                        <label className=" flex items-center gap-2 mb-2 text-sm font-medium text-gray-700 mb-1">
-                          <span onClick={(e) => handleOpenMeasurementInfo("Waist", e)} className="cursor-pointer"> <div className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors">
-                            <span className="text-xs text-gray-600 font-semibold">i</span>
-                          </div></span> Waist <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Enter waist"
-                          value={customMeasurements.waist}
-                          onChange={(e) => setCustomMeasurements({ ...customMeasurements, waist: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Shoulder */}
-                    <div className="flex items-start gap-3">
-
-                      <div className="flex-1">
-                        <label className=" flex items-center gap-2 mb-2 text-sm font-medium text-gray-700 mb-1">
-                          <span onClick={(e) => handleOpenMeasurementInfo("Shoulder", e)} className="cursor-pointer"> <div className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors">
-                            <span className="text-xs text-gray-600 font-semibold">i</span>
-                          </div></span> Shoulder<span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Enter Shoulder"
-                          value={customMeasurements.waist}
-                          onChange={(e) => setCustomMeasurements({ ...customMeasurements, waist: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Sleeve Length */}
-                    <div className="flex items-start gap-3">
-
-                      <div className="flex-1">
-                        <label className=" flex items-center gap-2 mb-2 text-sm font-medium text-gray-700 mb-1">
-                          <span onClick={(e) => handleOpenMeasurementInfo("Sleeve Length", e)} className="cursor-pointer"> <div className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors">
-                            <span className="text-xs text-gray-600 font-semibold">i</span>
-                          </div></span> Sleeve Length<span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Sleeve Length"
-                          value={customMeasurements.waist}
-                          onChange={(e) => setCustomMeasurements({ ...customMeasurements, waist: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Armhole */}
-                    <div className="flex items-start gap-3">
-
-                      <div className="flex-1">
-                        <label className=" flex items-center gap-2 mb-2 text-sm font-medium text-gray-700 mb-1">
-                          <span onClick={(e) => handleOpenMeasurementInfo("Armhole", e)} className="cursor-pointer"> <div className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors">
-                            <span className="text-xs text-gray-600 font-semibold">i</span>
-                          </div></span>  Armhole<span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Enter Armhole"
-                          value={customMeasurements.waist}
-                          onChange={(e) => setCustomMeasurements({ ...customMeasurements, waist: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Length */}
-                    <div className="flex items-start gap-3">
-
-                      <div className="flex-1">
-                        <label className=" flex items-center gap-2 mb-2 text-sm font-medium text-gray-700 mb-1">
-                          <span onClick={(e) => handleOpenMeasurementInfo("Length", e)} className="cursor-pointer"> <div className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors">
-                            <span className="text-xs text-gray-600 font-semibold">i</span>
-                          </div></span>  Length<span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Enter length"
-                          value={customMeasurements.length}
-                          onChange={(e) => setCustomMeasurements({ ...customMeasurements, length: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-
-
+                    ))}
+                  </div>
+                  
+                  {/* Close button at bottom */}
+                  <div className="mt-6 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleCloseViewModal}
+                      className="px-6 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      Close
+                    </button>
                   </div>
                 </div>
               )}
 
               {/* How to Measure Content - Table Chart */}
-              {modalSubTab === "How to Measure" && modalMainTab === "Table Chart" && (
+              {modalSubTab === "How to Measure" && effectiveMainTab === "Table Chart" && hasTableTemplate && (
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-6">How to measure</h3>
 
                   <div className="flex gap-8 flex-col lg:flex-row">
-                    {/* Image Placeholder */}
+                    {/* Image */}
                     <div className="flex-1 flex justify-center items-start">
-                      <div className="w-full max-w-md  bg-white border-2 border-dashed border-gray-300 rounded-lg p-12 flex flex-col items-center justify-center">
-                        {/* Mountain Icon with Sun */}
-                        <svg
-                          viewBox="0 0 120 80"
-                          className="w-32 h-20 mb-4"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          {/* Sun */}
-                          <circle cx="25" cy="20" r="8" fill="#9ca3af" opacity="0.6" />
-                          <circle cx="25" cy="20" r="6" fill="#d1d5db" />
-
-                          {/* Mountains */}
-                          <path
-                            d="M 20 60 L 35 40 L 45 55 L 60 30 L 75 50 L 85 35 L 100 50 L 105 45 L 110 50 L 120 60 L 20 60 Z"
-                            fill="#d1d5db"
-                            stroke="#9ca3af"
-                            strokeWidth="1"
-                          />
-                          <path
-                            d="M 30 60 L 40 48 L 50 55 L 60 40 L 75 52 L 85 38 L 95 50 L 110 60 L 30 60 Z"
-                            fill="#e5e7eb"
-                          />
-                        </svg>
-
-                        {/* Placeholder Text */}
-                        <p className="text-gray-600 text-sm font-medium text-center">
-                          No guide image available
-                        </p>
-                      </div>
+                      {tableData?.guideImage ? (
+                        <img
+                          src={tableData.guideImage}
+                          alt="Measurement guide"
+                          className="w-full max-w-md rounded-lg shadow-md object-contain"
+                        />
+                      ) : (
+                        <div className="w-full max-w-md bg-white border-2 border-dashed border-gray-300 rounded-lg p-12 flex flex-col items-center justify-center">
+                          <svg
+                            viewBox="0 0 120 80"
+                            className="w-32 h-20 mb-4"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <circle cx="25" cy="20" r="8" fill="#9ca3af" opacity="0.6" />
+                            <circle cx="25" cy="20" r="6" fill="#d1d5db" />
+                            <path
+                              d="M 20 60 L 35 40 L 45 55 L 60 30 L 75 50 L 85 35 L 100 50 L 105 45 L 110 50 L 120 60 L 20 60 Z"
+                              fill="#d1d5db"
+                              stroke="#9ca3af"
+                              strokeWidth="1"
+                            />
+                            <path
+                              d="M 30 60 L 40 48 L 50 55 L 60 40 L 75 52 L 85 38 L 95 50 L 110 60 L 30 60 Z"
+                              fill="#e5e7eb"
+                            />
+                          </svg>
+                          <p className="text-gray-600 text-sm font-medium text-center">
+                            No guide image available
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Instructions */}
                     <div className="flex-1 space-y-6">
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2 text-md">
-                          <span className="w-4 h-4 rounded-full bg-blue-600 flex-shrink-0"></span>
-                          Waist
-                        </h4>
-                        <p className="text-gray-600 leading-relaxed text-sm">
-                          Wrap the tape around the narrowest part of your waist. Keep it parallel to the floor and snug but not tight.
-                        </p>
-                      </div>
-
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                          <span className="w-4 h-4 rounded-full bg-green-600 flex-shrink-0"></span>
-                          Hip
-                        </h4>
-                        <p className="text-gray-600 leading-relaxed text-sm">
-                          Measure around the widest part of your hips and seat, keeping the tape horizontal.
-                        </p>
-                      </div>
-
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                          <span className="w-4 h-4 rounded-full bg-amber-600 flex-shrink-0"></span>
-                          Inseam
-                        </h4>
-                        <p className="text-gray-600 leading-relaxed  text-sm">
-                          Measure from the crotch seam down to the bottom of the leg. Stand straight while taking this measurement.
-                        </p>
-                      </div>
-
-                      <div>
-                        <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                          <span className="w-4 h-4 rounded-full bg-purple-600 flex-shrink-0"></span>
-                          Outseam
-                        </h4>
-                        <p className="text-gray-600 leading-relaxed  text-sm">
-                          Measure from the top of the waistband down the side of the leg to the bottom hem. Stand straight while taking this measurement.
-                        </p>
-                      </div>
+                      {tableData?.measureDescription ? (
+                        <div 
+                          className="prose prose-sm text-gray-600"
+                          dangerouslySetInnerHTML={{ __html: tableData.measureDescription }}
+                        />
+                      ) : (
+                        tableData?.columns?.slice(1).map((col, index) => {
+                          const colors = ["bg-blue-600", "bg-green-600", "bg-amber-600", "bg-purple-600", "bg-pink-600", "bg-indigo-600"];
+                          const columnLabel = col.label || col.name || col.key || "";
+                          const cleanLabel = columnLabel.replace(/\(in\)|\(cm\)/gi, "").trim();
+                          return (
+                            <div key={col.key || index}>
+                              <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                                <span className={`w-4 h-4 rounded-full ${colors[index % colors.length]} flex-shrink-0`}></span>
+                                {cleanLabel}
+                              </h4>
+                              <p className="text-gray-600 leading-relaxed text-sm">
+                                Measure {cleanLabel.toLowerCase()} according to standard measurement guidelines.
+                              </p>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
                 </div>
               )}
 
               {/* How to Measure Content - Custom Size */}
-              {modalSubTab === "How to Measure" && modalMainTab === "Custom Size" && (
+              {modalSubTab === "How to Measure" && effectiveMainTab === "Custom Size" && hasCustomTemplate && (
                 <div>
                   {/* Measurement Instructions */}
-                  <div className="space-y-6">
-                    {/* Chest / Bust */}
-                    <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-lg font-semibold text-gray-900">
-                          Chest / Bust <span className="text-red-500">*</span>
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={(e) => handleOpenMeasurementInfo("Chest / Bust", e)}
-                          className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors cursor-pointer"
-                        >
-                          <span className="text-xs text-gray-600 font-semibold">i</span>
-                        </button>
+                  <div className="space-y-4">
+                    {customData?.fields?.map((field, index) => (
+                      <div key={index} className="bg-gray-100 p-4 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-lg font-semibold text-gray-900">
+                            {field.name} {field.required !== false && <span className="text-red-500">*</span>}
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenMeasurementInfo(field, e)}
+                            className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors cursor-pointer"
+                          >
+                            <span className="text-xs text-gray-600 font-semibold">i</span>
+                          </button>
+                        </div>
+                        <p className="text-gray-700 text-sm leading-relaxed mb-2">
+                          {field.instruction || `Follow the standard measurement guidelines for ${field.name.toLowerCase()}.`}
+                        </p>
+                        {field.range && (
+                          <p className="text-sm text-gray-600 border-t border-gray-300 pt-2">
+                            Range: {field.range}
+                          </p>
+                        )}
                       </div>
-                      <p className="text-gray-700 text-sm leading-relaxed mb-2">
-                        For kurta, measure around the fullest part of the chest. Kurta should have 2-3 inches of ease for comfortable fit.
-                      </p>
-                      <p className="text-sm text-gray-600 border-t border-gray-300 pt-2">
-                        Range: 20 - 60 in
-                      </p>
-                    </div>
-
-                    {/* Waist */}
-                    <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-lg font-semibold text-gray-900">
-                          Waist <span className="text-red-500">*</span>
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={(e) => handleOpenMeasurementInfo("Waist", e)}
-                          className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors cursor-pointer"
-                        >
-                          <span className="text-xs text-gray-600 font-semibold">i</span>
-                        </button>
-                      </div>
-                      <p className="text-gray-700 text-sm leading-relaxed mb-2">
-                        Measure around the narrowest part of your waist. Keep it parallel to the floor and snug but not tight.
-                      </p>
-                      <p className="text-sm text-gray-600 border-t border-gray-300 pt-2">
-                        Range: 20 - 60 in
-                      </p>
-                    </div>
-
-                    {/* Shoulder */}
-                    <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-lg font-semibold text-gray-900">
-                          Shoulder <span className="text-red-500">*</span>
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={(e) => handleOpenMeasurementInfo("Shoulder", e)}
-                          className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors cursor-pointer"
-                        >
-                          <span className="text-xs text-gray-600 font-semibold">i</span>
-                        </button>
-                      </div>
-                      <p className="text-gray-700 text-sm leading-relaxed mb-2">
-                        Measure from the edge of one shoulder to the edge of the other shoulder across the back.
-                      </p>
-                      <p className="text-sm text-gray-600 border-t border-gray-300 pt-2">
-                        Range: 20 - 60 in
-                      </p>
-                    </div>
-
-                    {/* Sleeve Length */}
-                    <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-lg font-semibold text-gray-900">
-                          Sleeve Length <span className="text-red-500">*</span>
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={(e) => handleOpenMeasurementInfo("Sleeve Length", e)}
-                          className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors cursor-pointer"
-                        >
-                          <span className="text-xs text-gray-600 font-semibold">i</span>
-                        </button>
-                      </div>
-                      <p className="text-gray-700 text-sm leading-relaxed mb-2">
-                        Measure from the shoulder point down to where you want the sleeve to end.
-                      </p>
-                      <p className="text-sm text-gray-600 border-t border-gray-300 pt-2">
-                        Range: 20 - 60 in
-                      </p>
-                    </div>
-
-                    {/* Armhole */}
-                    <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-lg font-semibold text-gray-900">
-                          Armhole <span className="text-red-500">*</span>
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={(e) => handleOpenMeasurementInfo("Armhole", e)}
-                          className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors cursor-pointer"
-                        >
-                          <span className="text-xs text-gray-600 font-semibold">i</span>
-                        </button>
-                      </div>
-                      <p className="text-gray-700 text-sm leading-relaxed mb-2">
-                        Measure around the armhole opening, ensuring the tape follows the curve of the armhole seam.
-                      </p>
-                      <p className="text-sm text-gray-600 border-t border-gray-300 pt-2">
-                        Range: 20 - 60 in
-                      </p>
-                    </div>
-
-                    {/* Length */}
-                    <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-lg font-semibold text-gray-900">
-                          Length <span className="text-red-500">*</span>
-                        </h4>
-                        <button
-                          type="button"
-                          onClick={(e) => handleOpenMeasurementInfo("Length", e)}
-                          className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors cursor-pointer"
-                        >
-                          <span className="text-xs text-gray-600 font-semibold">i</span>
-                        </button>
-                      </div>
-                      <p className="text-gray-700 text-sm leading-relaxed mb-2">
-                        Measure from the top of the shoulder down to the desired length of the garment.
-                      </p>
-                      <p className="text-sm text-gray-600 border-t border-gray-300 pt-2">
-                        Range: 20 - 60 in
-                      </p>
-                    </div>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Measurement Info Modal */}
       {measurementInfoModal && (() => {
@@ -1254,19 +1480,31 @@ export default function Dashboard() {
               <div className="flex items-center justify-between gap-4">
                 {/* Tabs */}
                 <div className="flex gap-2">
-                  {["Table Template", "Custom Size Template"].map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setTemplateTab(tab)}
-                      className={`px-4 py-2 text-sm font-medium cursor-pointer rounded-lg transition-colors ${templateTab === tab
-                        ? "bg-gray-800 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
+                  {(() => {
+                    const allTabs = ["Table Template", "Custom Size Template"];
+                    let availableTabs = allTabs;
+                    
+                    // Filter tabs based on restriction
+                    if (restrictedTemplateType === "table") {
+                      availableTabs = ["Table Template"];
+                    } else if (restrictedTemplateType === "custom") {
+                      availableTabs = ["Custom Size Template"];
+                    }
+                    
+                    return availableTabs.map((tab) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setTemplateTab(tab)}
+                        className={`px-4 py-2 text-sm font-medium cursor-pointer rounded-lg transition-colors ${templateTab === tab
+                          ? "bg-gray-800 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                      >
+                        {tab}
+                      </button>
+                    ));
+                  })()}
                 </div>
 
                 {/* Search Bar */}
@@ -1295,44 +1533,69 @@ export default function Dashboard() {
                   ).length > 0 ? (
                     templates
                       .filter(t => !templateSearch || t.name.toLowerCase().includes(templateSearch.toLowerCase()))
-                      .map((template) => (
-                        <div key={template.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                          <div className="flex items-center gap-4">
-                            <div>
-                              <h3 className="text-base font-semibold text-gray-900 mb-2">{template.name}</h3>
-                              <div className="flex gap-2 flex-wrap">
-                                <span className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full capitalize">{template.gender}</span>
-                                <span className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full capitalize">{template.category}</span>
-                                <span className={`px-3 py-1 text-xs font-medium rounded-full ${template.isActive
-                                  ? "bg-green-100 text-green-600"
-                                  : "bg-red-100 text-red-600"
-                                  }`}>
-                                  {template.status}
-                                </span>
+                      .map((template) => {
+                        const isAssignedToProduct =
+                          selectedProduct && selectedProduct.tableTemplateId === template.id;
+                        const isAssigningThis =
+                          fetcher.state !== "idle" && assigningTemplate === template.id;
+
+                        return (
+                          <div key={template.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center gap-4">
+                              <div>
+                                <h3 className="text-base font-semibold text-gray-900 mb-2">{template.name}</h3>
+                                <div className="flex gap-2 flex-wrap">
+                                  <span className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full capitalize">{template.gender}</span>
+                                  <span className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full capitalize">{template.category}</span>
+                                  <span className={`px-3 py-1 text-xs font-medium rounded-full ${template.isActive
+                                    ? "bg-green-100 text-green-600"
+                                    : "bg-red-100 text-red-600"
+                                    }`}>
+                                    {template.status}
+                                  </span>
+                                </div>
                               </div>
                             </div>
+                            <div className="flex items-center gap-3">
+                              {isAssignedToProduct && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUnassignTemplate(selectedProduct.id, "table")}
+                                  className="px-3 py-1.5 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                >
+                                  Delete Chart
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) =>
+                                  isAssignedToProduct
+                                    ? handleOpenViewModal(selectedProduct.id, e)
+                                    : handleAssignTemplate(template, "table")
+                                }
+                                disabled={!isAssignedToProduct && isAssigningThis}
+                                className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
+                                  !isAssignedToProduct && isAssigningThis
+                                    ? "bg-gray-400 text-white cursor-not-allowed"
+                                    : "bg-blue-600 text-white hover:bg-blue-700"
+                                }`}
+                              >
+                                {!isAssignedToProduct && isAssigningThis ? (
+                                  <>
+                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Assigning...
+                                  </>
+                                ) : (
+                                  isAssignedToProduct ? "View Chart" : "+ Assign Chart"
+                                )}
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={(e) => handleOpenViewTemplate(template, e)}
-                              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-white text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                              View
-                            </button>
-                            <button
-                              type="button"
-                              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
-                            >
-                              + Assign Chart
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                   ) : (
                     <div className="text-center py-12">
                       <p className="text-gray-500">No table templates found.</p>
@@ -1345,44 +1608,69 @@ export default function Dashboard() {
                   ).length > 0 ? (
                     customTemplates
                       .filter(t => !templateSearch || t.name.toLowerCase().includes(templateSearch.toLowerCase()))
-                      .map((template) => (
-                        <div key={template.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                          <div className="flex items-center gap-4">
-                            <div>
-                              <h3 className="text-base font-semibold text-gray-900 mb-2">{template.name}</h3>
-                              <div className="flex gap-2 flex-wrap">
-                                <span className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full capitalize">{template.gender}</span>
-                                <span className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full capitalize">{template.clothingType}</span>
-                                <span className={`px-3 py-1 text-xs font-medium rounded-full ${template.isActive
-                                  ? "bg-green-100 text-green-600"
-                                  : "bg-red-100 text-red-600"
-                                  }`}>
-                                  {template.status}
-                                </span>
+                      .map((template) => {
+                        const isAssignedToProduct =
+                          selectedProduct && selectedProduct.customTemplateId === template.id;
+                        const isAssigningThis =
+                          fetcher.state !== "idle" && assigningTemplate === template.id;
+
+                        return (
+                          <div key={template.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center gap-4">
+                              <div>
+                                <h3 className="text-base font-semibold text-gray-900 mb-2">{template.name}</h3>
+                                <div className="flex gap-2 flex-wrap">
+                                  <span className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full capitalize">{template.gender}</span>
+                                  <span className="px-3 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full capitalize">{template.clothingType}</span>
+                                  <span className={`px-3 py-1 text-xs font-medium rounded-full ${template.isActive
+                                    ? "bg-green-100 text-green-600"
+                                    : "bg-red-100 text-red-600"
+                                    }`}>
+                                    {template.status}
+                                  </span>
+                                </div>
                               </div>
                             </div>
+                            <div className="flex items-center gap-3">
+                              {isAssignedToProduct && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUnassignTemplate(selectedProduct.id, "custom")}
+                                  className="px-3 py-1.5 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                >
+                                  Delete Chart
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) =>
+                                  isAssignedToProduct
+                                    ? handleOpenViewModal(selectedProduct.id, e)
+                                    : handleAssignTemplate(template, "custom")
+                                }
+                                disabled={!isAssignedToProduct && isAssigningThis}
+                                className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
+                                  !isAssignedToProduct && isAssigningThis
+                                    ? "bg-gray-400 text-white cursor-not-allowed"
+                                    : "bg-blue-600 text-white hover:bg-blue-700"
+                                }`}
+                              >
+                                {!isAssignedToProduct && isAssigningThis ? (
+                                  <>
+                                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Assigning...
+                                  </>
+                                ) : (
+                                  isAssignedToProduct ? "View Chart" : "+ Assign Chart"
+                                )}
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={(e) => handleOpenViewTemplate(template, e)}
-                              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-white text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                              View
-                            </button>
-                            <button
-                              type="button"
-                              className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
-                            >
-                              + Assign Chart
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                   ) : (
                     <div className="text-center py-12">
                       <p className="text-gray-500">No custom templates found.</p>
@@ -1643,6 +1931,83 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (() => {
+        const { productId, templateType } = deleteConfirm;
+        const product = products.find(p => p.id === productId);
+        const name = product?.title || "this product";
+
+        let title = "Remove chart assignment";
+        let message = `Are you sure you want to remove the chart assignment from ${name}?`;
+
+        if (templateType === "table") {
+          title = "Remove Table Chart";
+          message = `Are you sure you want to remove the assigned Table Chart from ${name}?`;
+        } else if (templateType === "custom") {
+          title = "Remove Custom Size Chart";
+          message = `Are you sure you want to remove the assigned Custom Size Chart from ${name}?`;
+        } else if (templateType === "all") {
+          title = "Remove All Charts";
+          message = `Are you sure you want to remove all chart assignments from ${name}?`;
+        }
+
+        const handleCloseConfirm = () => setDeleteConfirm(null);
+
+        const handleConfirm = () => {
+          handleUnassignTemplate(productId, templateType);
+          // If the size-chart modal is open for this product, also close it
+          if (viewModalProductId === productId) {
+            handleCloseViewModal();
+          }
+          handleCloseConfirm();
+        };
+
+        return (
+          <div
+            className="fixed inset-0 bg-black/40 z-[600] flex items-center justify-center"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                handleCloseConfirm();
+              }
+            }}
+          >
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+                <button
+                  type="button"
+                  onClick={handleCloseConfirm}
+                  className="p-1.5 hover:bg-gray-100 rounded-full"
+                >
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="px-5 py-4">
+                <p className="text-sm text-gray-700">{message}</p>
+              </div>
+              <div className="px-5 py-3 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseConfirm}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirm}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
 
   );
