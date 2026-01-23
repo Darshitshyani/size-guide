@@ -424,6 +424,7 @@ export default function Templates() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [chartName, setChartName] = useState("");
   const [nameError, setNameError] = useState("");
+  const [columnError, setColumnError] = useState("");
   const [chartColumns, setChartColumns] = useState([]);
   const [chartRows, setChartRows] = useState([]);
   const [guideImage, setGuideImage] = useState(null);
@@ -1056,16 +1057,24 @@ export default function Templates() {
     const newKey = `col_${Date.now()}`;
     setChartColumns([...chartColumns, { label: "New Column (in)", key: newKey }]);
     setChartRows(chartRows.map(row => ({ ...row, [newKey]: "" })));
+    setColumnError(""); // Clear column error when column is added
   };
 
   const handleRemoveColumn = (keyToRemove) => {
     if (keyToRemove === "size") return; // Don't remove size column
-    setChartColumns(chartColumns.filter(col => col.key !== keyToRemove));
+    const newColumns = chartColumns.filter(col => col.key !== keyToRemove);
+    setChartColumns(newColumns);
     setChartRows(chartRows.map(row => {
       const newRow = { ...row };
       delete newRow[keyToRemove];
       return newRow;
     }));
+    // Clear column error if there are still measurement columns left
+    const hasSizeColumn = newColumns.some(col => col.key === "size");
+    const measurementColumns = newColumns.filter(col => col.key !== "size");
+    if (hasSizeColumn && measurementColumns.length > 0) {
+      setColumnError("");
+    }
   };
 
   const handleColumnDragStart = (e, index) => {
@@ -1229,13 +1238,29 @@ export default function Templates() {
 
   // Save template to database
   const handleSaveTemplate = async () => {
-    if (!chartName.trim()) return;
+    // Validate name
+    if (!chartName.trim()) {
+      setNameError("Template name is required");
+      return;
+    }
+
+    // Validate columns - need at least size column + one measurement column
+    const hasSizeColumn = chartColumns.some(col => col.key === "size");
+    const measurementColumns = chartColumns.filter(col => col.key !== "size");
+    if (!hasSizeColumn || measurementColumns.length === 0) {
+      setColumnError("At least one measurement column (besides Size) is required");
+      return;
+    }
 
     // Check for duplicate name safeguard
     if (templates.some(t => t.name.trim().toLowerCase() === chartName.trim().toLowerCase() && (!isEditMode || t.id !== editingTemplateId))) {
       setNameError("A template with this name already exists");
       return;
     }
+
+    // Clear errors if validation passes
+    setNameError("");
+    setColumnError("");
 
     setIsSaving(true);
 
@@ -2431,6 +2456,14 @@ export default function Templates() {
                           </svg>
                         </button>
                       </div>
+                      {columnError && (
+                        <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          {columnError}
+                        </p>
+                      )}
                     </div>
 
                     {/* Measurement Instructions */}
@@ -2581,31 +2614,32 @@ export default function Templates() {
                         </svg>
                         Back
                       </button>
-                      <button
-                        type="button"
-                        onClick={handleSaveTemplate}
-                        disabled={!chartName.trim() || isSaving || !!nameError || (isEditMode && initialFormState && (
+                      {(() => {
+                        const hasSizeColumn = chartColumns.some(col => col.key === "size");
+                        const measurementColumns = chartColumns.filter(col => col.key !== "size");
+                        const hasValidColumns = hasSizeColumn && measurementColumns.length > 0;
+                        const isDisabled = !chartName.trim() || !hasValidColumns || isSaving || !!nameError || !!columnError || (isEditMode && initialFormState && (
                           chartName === initialFormState.name &&
                           JSON.stringify(chartColumns) === JSON.stringify(initialFormState.columns) &&
                           JSON.stringify(chartRows) === JSON.stringify(initialFormState.rows) &&
                           (guideImage || "") === (initialFormState.guideImage || "") &&
                           !pendingGuideImage &&
                           (measureDescription || "") === (initialFormState.measureDescription || "")
-                        ))}
-                        className={`flex items-center cursor-pointer gap-2 px-5 py-2.5 text-sm font-semibold rounded-md transition-all duration-200 ${!chartName.trim() || isSaving || !!nameError || (isEditMode && initialFormState && (
-                          chartName === initialFormState.name &&
-                          JSON.stringify(chartColumns) === JSON.stringify(initialFormState.columns) &&
-                          JSON.stringify(chartRows) === JSON.stringify(initialFormState.rows) &&
-                          (guideImage || "") === (initialFormState.guideImage || "") &&
-                          !pendingGuideImage &&
-                          (measureDescription || "") === (initialFormState.measureDescription || "")
-                        ))
-                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                          : "bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-md hover:shadow-lg"
-                          }`}
-                      >
-                        {isSaving ? "Saving..." : "Save"}
-                      </button>
+                        ));
+                        return (
+                          <button
+                            type="button"
+                            onClick={handleSaveTemplate}
+                            disabled={isDisabled}
+                            className={`flex items-center cursor-pointer gap-2 px-5 py-2.5 text-sm font-semibold rounded-md transition-all duration-200 ${isDisabled
+                              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                              : "bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-md hover:shadow-lg"
+                              }`}
+                          >
+                            {isSaving ? "Saving..." : "Save"}
+                          </button>
+                        );
+                      })()}
                     </div>
                   </>
                 )}
@@ -2718,7 +2752,7 @@ export default function Templates() {
                     <h3 className="text-lg font-semibold text-gray-900 mb-5">How to measure</h3>
                     <div className="flex gap-8">
                       {/* Guide Image Placeholder */}
-                      <div className="flex-shrink-0 w-56">
+                      {guideImage && <div className="flex-shrink-0 w-56">
                         {guideImage ? (
                           <img
                             src={guideImage}
@@ -2732,10 +2766,10 @@ export default function Templates() {
                               <circle cx="50" cy="35" r="8" fill="#e5e7eb" />
                               <path d="M 30 70 L 50 45 L 70 55 L 100 30 L 130 50 L 170 40 L 170 70 L 30 70 Z" fill="#e5e7eb" />
                             </svg>
-                            <p className="text-sm text-gray-500 font-medium">No guide image available</p>
+                            <p className="text-sm text-gray-500 font-medium">No guide image available saas</p>
                           </div>
                         )}
-                      </div>
+                      </div>}
 
                       {/* Measurement Instructions - Shows user's custom description */}
                       <div className="flex-1">

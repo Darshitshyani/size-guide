@@ -69,13 +69,16 @@ export const action = async ({ request }) => {
         // Fetch template data
         const template = await prisma.tailorTemplate.findUnique({
           where: { id: templateId },
-          select: { fields: true, clothingType: true, gender: true, isActive: true },
+          select: { fields: true, clothingType: true, gender: true, isActive: true, fitPreferences: true, collarOptions: true, enableStitchingNotes: true },
         });
         if (template) {
           templateData = {
             fields: typeof template.fields === "string" ? JSON.parse(template.fields) : template.fields,
             clothingType: template.clothingType,
             gender: template.gender,
+            fitPreferences: template.fitPreferences ? (typeof template.fitPreferences === "string" ? JSON.parse(template.fitPreferences) : template.fitPreferences) : null,
+            collarOptions: template.collarOptions ? (typeof template.collarOptions === "string" ? JSON.parse(template.collarOptions) : template.collarOptions) : null,
+            enableStitchingNotes: template.enableStitchingNotes || false,
           };
           templateStatus = template.isActive ? "Active" : "Inactive";
         }
@@ -203,6 +206,9 @@ export const loader = async ({ request }) => {
     status: template.isActive ? "Active" : "Inactive",
     isActive: template.isActive,
     fields: typeof template.fields === "string" ? JSON.parse(template.fields) : template.fields,
+    fitPreferences: template.fitPreferences ? (typeof template.fitPreferences === "string" ? JSON.parse(template.fitPreferences) : template.fitPreferences) : null,
+    collarOptions: template.collarOptions ? (typeof template.collarOptions === "string" ? JSON.parse(template.collarOptions) : template.collarOptions) : null,
+    enableStitchingNotes: template.enableStitchingNotes || false,
   }));
 
   // Fetch existing table template assignments with full template data
@@ -234,7 +240,10 @@ export const loader = async ({ request }) => {
           fields: true,
           clothingType: true,
           gender: true,
-          isActive: true
+          isActive: true,
+          fitPreferences: true,
+          collarOptions: true,
+          enableStitchingNotes: true
         } 
       } 
     },
@@ -266,6 +275,9 @@ export const loader = async ({ request }) => {
         fields: typeof a.template.fields === "string" ? JSON.parse(a.template.fields) : a.template.fields,
         clothingType: a.template.clothingType,
         gender: a.template.gender,
+        fitPreferences: a.template.fitPreferences ? (typeof a.template.fitPreferences === "string" ? JSON.parse(a.template.fitPreferences) : a.template.fitPreferences) : null,
+        collarOptions: a.template.collarOptions ? (typeof a.template.collarOptions === "string" ? JSON.parse(a.template.collarOptions) : a.template.collarOptions) : null,
+        enableStitchingNotes: a.template.enableStitchingNotes || false,
       },
     };
   });
@@ -1280,26 +1292,90 @@ export default function Dashboard() {
               {/* Custom Size - Details Content */}
               {effectiveMainTab === "Custom Size" && modalSubTab === "Details" && hasCustomTemplate && (
                 <div>
-                  <div className="space-y-4">
-                    {customData?.fields?.map((field, index) => (
-                      <div key={index} className="flex items-start gap-3">
-                        <div className="flex-1">
-                          <label className="flex items-center gap-2 mb-2 text-sm font-medium text-gray-700">
-                            <span onClick={(e) => handleOpenMeasurementInfo(field, e)} className="cursor-pointer">
-                              <div className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors">
-                                <span className="text-xs text-gray-600 font-semibold">i</span>
-                              </div>
-                            </span>
-                            {field.name} {field.required !== false && <span className="text-red-500">*</span>}
-                          </label>
-                          <input
-                            type="text"
-                            placeholder={`Enter ${field.name.toLowerCase()}`}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
-                          />
+                  <div className="space-y-6">
+                    {/* Measurement Fields */}
+                    <div className="space-y-4">
+                      {customData?.fields?.map((field, index) => (
+                        <div key={index} className="flex items-start gap-3">
+                          <div className="flex-1">
+                            <label className="flex items-center gap-2 mb-2 text-sm font-medium text-gray-700">
+                              <span onClick={(e) => handleOpenMeasurementInfo(field, e)} className="cursor-pointer">
+                                <div className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors">
+                                  <span className="text-xs text-gray-600 font-semibold">i</span>
+                                </div>
+                              </span>
+                              {field.name} {field.required !== false && <span className="text-red-500">*</span>}
+                            </label>
+                            <input
+                              type="text"
+                              placeholder={`Enter ${field.name.toLowerCase()}`}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Fit Preferences */}
+                    {customData?.fitPreferences && customData.fitPreferences.length > 0 && (
+                      <div className="border-t border-gray-200 pt-6">
+                        <h3 className="text-sm font-medium text-gray-900 mb-3">Fit Preference</h3>
+                        <div className="grid grid-cols-3 gap-3">
+                          {customData.fitPreferences.filter(f => f.enabled !== false).map((fit, idx) => (
+                            <div key={idx} className="text-center py-2 px-1 border border-gray-200 rounded-md text-sm text-gray-600 flex flex-col items-center justify-center min-h-[60px]">
+                              <span className="font-medium">{fit.label}</span>
+                              <span className="text-[10px] opacity-70">({fit.allowance})</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    ))}
+                    )}
+
+                    {/* Stitching Notes */}
+                    {customData?.enableStitchingNotes && (
+                      <div className="border-t border-gray-200 pt-6">
+                        <h3 className="text-sm font-medium text-gray-900 mb-3">Stitching Notes</h3>
+                        <textarea
+                          placeholder="Add any specific instructions for stitching..."
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400 resize-none"
+                          readOnly
+                          defaultValue=""
+                        />
+                      </div>
+                    )}
+
+                    {/* Collar Options */}
+                    {customData?.collarOptions && customData.collarOptions.length > 0 && (
+                      <div className="border-t border-gray-200 pt-6 pb-4">
+                        <h3 className="text-sm font-medium text-gray-900 mb-3">Collar Option</h3>
+                        <div className="grid grid-cols-3 gap-3">
+                          {customData.collarOptions.filter(c => c.enabled !== false).map((collar, idx) => (
+                            <div
+                              key={idx}
+                              className="cursor-pointer border border-gray-200 rounded-lg p-2 text-center transition-all hover:bg-gray-50"
+                            >
+                              <div className="w-full h-24 mb-2 bg-white rounded flex items-center justify-center overflow-hidden border border-gray-100">
+                                {collar.image ? (
+                                  <img
+                                    src={collar.image}
+                                    alt={collar.name}
+                                    className="w-full h-full object-contain"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                  </div>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-700 font-medium">{collar.name}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   {/* Close button at bottom */}
@@ -1800,7 +1876,10 @@ export default function Dashboard() {
                                     name: template.name,
                                     fields: template.fields || null,
                                     gender: template.gender,
-                                    clothingType: template.clothingType
+                                    clothingType: template.clothingType,
+                                    fitPreferences: template.fitPreferences || null,
+                                    collarOptions: template.collarOptions || null,
+                                    enableStitchingNotes: template.enableStitchingNotes || false
                                   }, e);
                                 }}
                                 className="px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
@@ -2025,31 +2104,95 @@ export default function Dashboard() {
 
               {/* Custom Template - Details Tab - Form-like field display */}
               {viewTemplateModal.fields && !viewTemplateModal.columns && viewTemplateSubTab === "Details" && (
-                <div className="space-y-4">
-                  {viewTemplateModal.fields.map((field, index) => (
-                    <div key={index} className="flex items-center gap-3">
-                      {/* Info Icon */}
-                      <button
-                        type="button"
-                        onClick={(e) => handleOpenMeasurementInfo(field, e)}
-                        className="w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-100 transition-colors cursor-pointer"
-                      >
-                        <span className="text-xs text-gray-500">i</span>
-                      </button>
-                      {/* Field Name */}
-                      <span className="text-sm font-medium text-gray-800 w-28 flex-shrink-0">
-                        {field.name}
-                        {field.required && <span className="text-red-500 ml-0.5">*</span>}
-                      </span>
-                      {/* Input Placeholder */}
-                      <input
-                        type="text"
-                        placeholder={`Enter ${field.name.toLowerCase()}`}
+                <div className="space-y-6">
+                  {/* Measurement Fields */}
+                  <div className="space-y-4">
+                    {viewTemplateModal.fields.map((field, index) => (
+                      <div key={index} className="flex items-center gap-3">
+                        {/* Info Icon */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleOpenMeasurementInfo(field, e)}
+                          className="w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-100 transition-colors cursor-pointer"
+                        >
+                          <span className="text-xs text-gray-500">i</span>
+                        </button>
+                        {/* Field Name */}
+                        <span className="text-sm font-medium text-gray-800 w-28 flex-shrink-0">
+                          {field.name}
+                          {field.required && <span className="text-red-500 ml-0.5">*</span>}
+                        </span>
+                        {/* Input Placeholder */}
+                        <input
+                          type="text"
+                          placeholder={`Enter ${field.name.toLowerCase()}`}
+                          readOnly
+                          className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-400 text-sm cursor-default"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Fit Preferences */}
+                  {viewTemplateModal.fitPreferences && viewTemplateModal.fitPreferences.length > 0 && (
+                    <div className="border-t border-gray-200 pt-6">
+                      <h3 className="text-sm font-medium text-gray-900 mb-3">Fit Preference</h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        {viewTemplateModal.fitPreferences.filter(f => f.enabled !== false).map((fit, idx) => (
+                          <div key={idx} className="text-center py-2 px-1 border border-gray-200 rounded-md text-sm text-gray-600 flex flex-col items-center justify-center min-h-[60px]">
+                            <span className="font-medium">{fit.label}</span>
+                            <span className="text-[10px] opacity-70">({fit.allowance})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stitching Notes */}
+                  {viewTemplateModal.enableStitchingNotes && (
+                    <div className="border-t border-gray-200 pt-6">
+                      <h3 className="text-sm font-medium text-gray-900 mb-3">Stitching Notes</h3>
+                      <textarea
+                        placeholder="Add any specific instructions for stitching..."
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400 resize-none"
                         readOnly
-                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg bg-white text-gray-400 text-sm cursor-default"
+                        defaultValue=""
                       />
                     </div>
-                  ))}
+                  )}
+
+                  {/* Collar Options */}
+                  {viewTemplateModal.collarOptions && viewTemplateModal.collarOptions.length > 0 && (
+                    <div className="border-t border-gray-200 pt-6 pb-4">
+                      <h3 className="text-sm font-medium text-gray-900 mb-3">Collar Option</h3>
+                      <div className="grid grid-cols-3 gap-3">
+                        {viewTemplateModal.collarOptions.filter(c => c.enabled !== false).map((collar, idx) => (
+                          <div
+                            key={idx}
+                            className="cursor-pointer border border-gray-200 rounded-lg p-2 text-center transition-all hover:bg-gray-50"
+                          >
+                            <div className="w-full h-24 mb-2 bg-white rounded flex items-center justify-center overflow-hidden border border-gray-100">
+                              {collar.image ? (
+                                <img
+                                  src={collar.image}
+                                  alt={collar.name}
+                                  className="w-full h-full object-contain"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gray-50">
+                                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-700 font-medium">{collar.name}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
