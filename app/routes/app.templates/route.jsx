@@ -857,6 +857,18 @@ export default function Templates() {
       return rest;
     }));
 
+    // Update editCustomTemplateFields with processed fields (that have image URLs instead of file objects)
+    // This ensures the info modal shows the correct image after saving
+    const updatedFieldsWithIds = processedFields.map((f, i) => {
+      const originalField = editCustomTemplateFields[i];
+      return { 
+        ...f, 
+        id: originalField?.id || Date.now() + i, 
+        enabled: originalField?.enabled !== false 
+      };
+    });
+    setEditCustomTemplateFields(updatedFieldsWithIds);
+
     // Process collar option image uploads
     let processedCollars = editCustomTemplateCollars;
     if (editEnableCollars) {
@@ -3035,9 +3047,13 @@ export default function Templates() {
               </button>
             </div>
             <div className="p-5 flex flex-col items-center justify-center">
-              {customTemplateInfoField.image ? (
+              {(customTemplateInfoField.image || customTemplateInfoField.file) ? (
                 <div className="w-[250px] h-[250px] bg-gray-50 rounded-lg mb-6 overflow-hidden border border-gray-100">
-                  <img src={customTemplateInfoField.image} alt={customTemplateInfoField.name} className="w-full h-full object-contain" />
+                  <img 
+                    src={customTemplateInfoField.file ? URL.createObjectURL(customTemplateInfoField.file) : customTemplateInfoField.image} 
+                    alt={customTemplateInfoField.name} 
+                    className="w-full h-full object-contain" 
+                  />
                 </div>
               ) : (
                 <div className="w-full h-40 bg-gray-50 rounded-lg mb-6 flex items-center justify-center">
