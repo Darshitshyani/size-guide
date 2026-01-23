@@ -886,13 +886,13 @@ export default function Dashboard() {
         {activeTab === "products" && (
           <div className="border border-gray-200 rounded-md bg-white flex-1 flex flex-col overflow-hidden">
             <div className="overflow-auto flex-1">
-              <table className="w-full border-collapse min-w-full">
+              <table className="w-full border-collapse" style={{ minWidth: '900px' }}>
                 <colgroup>
-                  <col style={{ width: 'auto' }} />
-                  <col style={{ width: '120px' }} />
-                  <col style={{ width: '180px' }} />
-                  <col style={{ width: '180px' }} />
-                  <col style={{ width: '120px' }} />
+                  <col />
+                  <col />
+                  <col />
+                  <col />
+                  <col />
                 </colgroup>
                 <thead className="sticky top-0 z-10 bg-gray-50">
                   <tr>
@@ -1585,7 +1585,7 @@ export default function Dashboard() {
             }
           }}
         >
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] min-h-[500px] overflow-hidden flex flex-col">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <div>
