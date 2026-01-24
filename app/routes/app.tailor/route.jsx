@@ -262,6 +262,10 @@ export default function CustomTailor() {
     const [editModalFile, setEditModalFile] = useState(null);
     const [originalEditModalField, setOriginalEditModalField] = useState(null); // Store original field state when modal opens
     const [originalEditModalFile, setOriginalEditModalFile] = useState(null); // Store original file state when modal opens
+    const [addFieldModal, setAddFieldModal] = useState(null); // New field data when adding
+    const [addFieldFile, setAddFieldFile] = useState(null); // File for new field image upload
+    const [addFieldErrors, setAddFieldErrors] = useState({}); // Validation errors for add field modal
+    const [showAddFieldDiscardWarning, setShowAddFieldDiscardWarning] = useState(false); // Discard warning for add field modal
     const [assignModalTemplate, setAssignModalTemplate] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [selectedProducts, setSelectedProducts] = useState([]);
@@ -419,7 +423,116 @@ export default function CustomTailor() {
     };
 
     const handleAddField = () => {
-        setMeasurementFields([{ id: Date.now(), name: "New Field", unit: "in", required: false, instruction: "", range: "0 - 100", image: "", enabled: true }, ...measurementFields]);
+        // Open add field modal with default values
+        setAddFieldModal({
+            name: "",
+            unit: "in",
+            required: false,
+            instruction: "",
+            range: "",
+            image: "",
+            enabled: true
+        });
+        setAddFieldFile(null);
+        setAddFieldErrors({});
+    };
+
+    const validateAddFieldForm = () => {
+        const errors = {};
+        
+        // Field Name validation
+        if (!addFieldModal.name || addFieldModal.name.trim() === "") {
+            errors.name = "Field name is required";
+        }
+        
+        // Unit validation
+        if (!addFieldModal.unit || addFieldModal.unit.trim() === "") {
+            errors.unit = "Unit is required";
+        }
+        
+        // Range validation
+        if (!addFieldModal.range || addFieldModal.range.trim() === "") {
+            errors.range = "Range is required";
+        }
+        
+        // Measurement Instructions validation
+        if (!addFieldModal.instruction || addFieldModal.instruction.trim() === "") {
+            errors.instruction = "Measurement instructions are required";
+        }
+        
+        // Guide Image validation - either file or URL must be provided
+        if (!addFieldFile && (!addFieldModal.image || addFieldModal.image.trim() === "")) {
+            errors.image = "Guide image is required (upload or paste URL)";
+        }
+        
+        setAddFieldErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
+    const handleSaveNewField = () => {
+        if (!addFieldModal) return;
+        
+        // Validate all fields
+        if (!validateAddFieldForm()) {
+            return;
+        }
+        
+        // Create new field with unique ID
+        const newField = {
+            id: Date.now(),
+            ...addFieldModal,
+            file: addFieldFile || null
+        };
+        
+        // Add to beginning of measurementFields
+        setMeasurementFields([newField, ...measurementFields]);
+        
+        // Close modal and reset states
+        setAddFieldModal(null);
+        setAddFieldFile(null);
+        setAddFieldErrors({});
+    };
+
+    const handleAddFieldFileUpload = (event) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            setAddFieldFile(file);
+            // Clear image error when file is uploaded
+            if (addFieldErrors.image) {
+                setAddFieldErrors(prev => ({ ...prev, image: "" }));
+            }
+        }
+    };
+
+    const handleCloseAddFieldModal = (forceClose = false) => {
+        if (forceClose) {
+            setAddFieldModal(null);
+            setAddFieldFile(null);
+            setAddFieldErrors({});
+            setShowAddFieldDiscardWarning(false);
+            return;
+        }
+
+        if (!addFieldModal) {
+            return;
+        }
+
+        // Check if any field has been changed from the default empty state
+        const hasChanges =
+            (addFieldModal.name && addFieldModal.name.trim() !== "") ||
+            (addFieldModal.range && addFieldModal.range.trim() !== "") ||
+            (addFieldModal.instruction && addFieldModal.instruction.trim() !== "") ||
+            (addFieldModal.image && addFieldModal.image.trim() !== "") ||
+            addFieldModal.required === true ||
+            addFieldFile !== null;
+
+        if (hasChanges) {
+            setShowAddFieldDiscardWarning(true);
+        } else {
+            setAddFieldModal(null);
+            setAddFieldFile(null);
+            setAddFieldErrors({});
+        }
     };
 
     const handleRemoveField = (fieldId) => {
@@ -748,7 +861,7 @@ export default function CustomTailor() {
 
                             {/* Fields Error Message */}
                             {fieldsError && (
-                                <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                                <div className="mx-5 my-4 p-3 bg-red-50 border border-red-200 rounded-md">
                                     <p className="text-sm text-red-600">Please enable at least one measurement field to create a template.</p>
                                 </div>
                             )}
@@ -1316,6 +1429,203 @@ export default function CustomTailor() {
                 </div>
             )}
 
+            {/* Add Field Modal */}
+            {addFieldModal && (
+                <div className="fixed inset-0 bg-black/50 z-[300] flex items-center justify-center">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
+                            <h2 className="text-lg font-bold text-gray-900">Add New Field</h2>
+                            <button onClick={() => handleCloseAddFieldModal()} className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer">
+                                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                            {/* Field Name */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Field Name <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={addFieldModal.name}
+                                    onChange={(e) => {
+                                        setAddFieldModal({ ...addFieldModal, name: e.target.value });
+                                        if (addFieldErrors.name) setAddFieldErrors(prev => ({ ...prev, name: "" }));
+                                    }}
+                                    placeholder="Enter field name"
+                                    className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${addFieldErrors.name ? "border-red-500" : "border-gray-300"}`}
+                                />
+                                {addFieldErrors.name && (
+                                    <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        </svg>
+                                        {addFieldErrors.name}
+                                    </p>
+                                )}
+                            </div>
+                            {/* Unit */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Unit <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    value={addFieldModal.unit}
+                                    onChange={(e) => {
+                                        setAddFieldModal({ ...addFieldModal, unit: e.target.value });
+                                        if (addFieldErrors.unit) setAddFieldErrors(prev => ({ ...prev, unit: "" }));
+                                    }}
+                                    className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${addFieldErrors.unit ? "border-red-500" : "border-gray-300"}`}
+                                >
+                                    <option value="">Select unit</option>
+                                    <option value="in">Inches (in)</option>
+                                    <option value="cm">Centimeters (cm)</option>
+                                </select>
+                                {addFieldErrors.unit && (
+                                    <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        </svg>
+                                        {addFieldErrors.unit}
+                                    </p>
+                                )}
+                            </div>
+                            {/* Range */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Range <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={addFieldModal.range}
+                                    onChange={(e) => {
+                                        // Only allow numbers, spaces, dashes, and commas
+                                        const value = e.target.value.replace(/[^0-9\s\-,]/g, '');
+                                        setAddFieldModal({ ...addFieldModal, range: value });
+                                        if (addFieldErrors.range) setAddFieldErrors(prev => ({ ...prev, range: "" }));
+                                    }}
+                                    placeholder="e.g., 0 - 100"
+                                    className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${addFieldErrors.range ? "border-red-500" : "border-gray-300"}`}
+                                />
+                                {addFieldErrors.range && (
+                                    <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        </svg>
+                                        {addFieldErrors.range}
+                                    </p>
+                                )}
+                            </div>
+                            {/* Instruction */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Measurement Instructions <span className="text-red-500">*</span>
+                                </label>
+                                <textarea
+                                    value={addFieldModal.instruction}
+                                    onChange={(e) => {
+                                        setAddFieldModal({ ...addFieldModal, instruction: e.target.value });
+                                        if (addFieldErrors.instruction) setAddFieldErrors(prev => ({ ...prev, instruction: "" }));
+                                    }}
+                                    placeholder="Describe how to take this measurement..."
+                                    rows={4}
+                                    className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${addFieldErrors.instruction ? "border-red-500" : "border-gray-300"}`}
+                                />
+                                {addFieldErrors.instruction && (
+                                    <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        </svg>
+                                        {addFieldErrors.instruction}
+                                    </p>
+                                )}
+                            </div>
+                            {/* Image URL */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Guide Image <span className="text-red-500">*</span>
+                                </label>
+                                <div className="flex gap-4 items-start">
+                                    {/* Image Preview Box */}
+                                    <div className="relative flex-shrink-0 group">
+                                        <div className={`w-20 h-20 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden bg-gray-50 hover:border-blue-500 transition-colors relative ${addFieldErrors.image ? "border-red-500" : "border-gray-300"}`}>
+                                            {(addFieldFile || addFieldModal.image) ? (
+                                                <img src={addFieldFile ? URL.createObjectURL(addFieldFile) : addFieldModal.image} alt="Guide" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-1">
+                                                    <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                    <span className="text-[10px] text-gray-400 font-medium">Upload</span>
+                                                </div>
+                                            )}
+                                            <input
+                                                type="file"
+                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                accept="image/*"
+                                                onChange={handleAddFieldFileUpload}
+                                            />
+                                        </div>
+                                        <p className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer text-nowrap opacity-0 group-hover:opacity-100 transition-opacity absolute top-20 mt-1 w-full text-center">Change Image</p>
+                                    </div>
+                                    {/* URL Input */}
+                                    <div className="flex-1 space-y-2">
+                                        <input
+                                            type="text"
+                                            value={addFieldModal.image || ""}
+                                            onChange={(e) => {
+                                                setAddFieldModal({ ...addFieldModal, image: e.target.value });
+                                                if (addFieldErrors.image) setAddFieldErrors(prev => ({ ...prev, image: "" }));
+                                            }}
+                                            placeholder="Paste image URL or upload"
+                                            className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-1 focus:border-blue-500 focus:ring-blue-500 ${addFieldErrors.image ? "border-red-500" : "border-gray-200"}`}
+                                        />
+                                        <p className="text-xs text-gray-400">Click the image box to upload or paste a URL</p>
+                                    </div>
+                                </div>
+                                {addFieldErrors.image && (
+                                    <p className="mt-2 text-xs text-red-500 flex items-center gap-1">
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        </svg>
+                                        {addFieldErrors.image}
+                                    </p>
+                                )}
+                            </div>
+                            {/* Required Toggle */}
+                            <label className="flex items-center gap-3 cursor-pointer mt-7">
+                                <div className={`relative w-10 h-5 rounded-full transition-colors ${addFieldModal.required ? "bg-blue-600" : "bg-gray-200"}`}>
+                                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${addFieldModal.required ? "translate-x-5" : ""}`} />
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={addFieldModal.required}
+                                    onChange={() => setAddFieldModal({ ...addFieldModal, required: !addFieldModal.required })}
+                                    className="sr-only"
+                                />
+                                <span className="text-sm text-gray-700">Required Field</span>
+                            </label>
+                        </div>
+                        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-gray-200 flex-shrink-0">
+                            <button
+                                onClick={() => handleCloseAddFieldModal()}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveNewField}
+                                className="px-5 py-2 text-sm font-semibold text-white bg-gray-900 rounded-lg hover:bg-gray-800 cursor-pointer"
+                            >
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Assign Modal */}
             {assignModalTemplate && (
                 <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center" onClick={(e) => { if (e.target === e.currentTarget) setAssignModalTemplate(null); }}>
@@ -1708,6 +2018,39 @@ export default function CustomTailor() {
                                 </button>
                                 <button
                                     onClick={() => handleCloseEditModal(true)}
+                                    className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 cursor-pointer"
+                                >
+                                    Discard
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Add Field Discard Warning Modal */}
+            {showAddFieldDiscardWarning && (
+                <div className="fixed inset-0 bg-black/50 z-[700] flex items-center justify-center">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
+                        <div className="p-5">
+                            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-amber-100 rounded-full">
+                                <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">Discard Changes?</h3>
+                            <p className="text-sm text-gray-500 text-center mb-6">
+                                You have unsaved changes. Closing this modal will discard your current changes.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowAddFieldDiscardWarning(false)}
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+                                >
+                                    Keep Editing
+                                </button>
+                                <button
+                                    onClick={() => handleCloseAddFieldModal(true)}
                                     className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 cursor-pointer"
                                 >
                                     Discard

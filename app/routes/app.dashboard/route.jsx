@@ -1595,7 +1595,7 @@ export default function Dashboard() {
 
                         {/* Placeholder Text */}
                         <p className="text-gray-600 text-sm font-medium text-center">
-                          No guide image available
+                          No guide image available daad
                         </p>
                       </div>
                     )}
@@ -1950,7 +1950,7 @@ export default function Dashboard() {
             }
           }}
         >
-          <div className={`bg-white rounded-lg shadow-xl w-full max-h-[90vh] overflow-hidden flex flex-col ${viewTemplateModal.columns ? "max-w-3xl" : "max-w-xl"}`}>
+          <div className={`bg-white rounded-lg shadow-xl w-full h-full max-h-[80vh] overflow-hidden flex flex-col ${viewTemplateModal.columns ? "max-w-xl" : "max-w-xl"}`}>
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <div className="flex items-center gap-3">
@@ -2028,7 +2028,7 @@ export default function Dashboard() {
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-auto p-6">
+            <div className="flex-1 overflow-auto p-6 ">
               {/* Table Template - Details Tab */}
               {viewTemplateModal.columns && viewTemplateSubTab === "Details" && (
                 <div className="overflow-x-auto">
@@ -2069,14 +2069,13 @@ export default function Dashboard() {
               {viewTemplateModal.columns && viewTemplateSubTab === "How to Measure" && (
                 <div className="flex gap-8 flex-col lg:flex-row">
                   {/* Image */}
-                  <div className="flex-1 flex justify-center items-start">
-                    {viewTemplateModal.guideImage ? (
+                  {viewTemplateModal.guideImage && (<div className="flex-1 flex justify-center items-start">
+             
                       <img
                         src={viewTemplateModal.guideImage}
                         alt="How to measure"
                         className="max-w-full max-h-80 object-contain rounded-lg border border-gray-200"
                       />
-                    ) : (
                       <div className="w-full max-w-md bg-white border-2 border-dashed border-gray-300 rounded-lg p-12 flex flex-col items-center justify-center">
                         <svg viewBox="0 0 120 80" className="w-32 h-20 mb-4" xmlns="http://www.w3.org/2000/svg">
                           <circle cx="25" cy="20" r="8" fill="#9ca3af" opacity="0.6" />
@@ -2084,10 +2083,10 @@ export default function Dashboard() {
                           <path d="M 20 60 L 35 40 L 45 55 L 60 30 L 75 50 L 85 35 L 100 50 L 105 45 L 110 50 L 120 60 L 20 60 Z" fill="#d1d5db" stroke="#9ca3af" strokeWidth="1" />
                           <path d="M 30 60 L 40 48 L 50 55 L 60 40 L 75 52 L 85 38 L 95 50 L 110 60 L 30 60 Z" fill="#e5e7eb" />
                         </svg>
-                        <p className="text-gray-600 text-sm font-medium text-center">No guide image available</p>
+                        <p className="text-gray-600 text-sm font-medium text-center">No guide image available </p>
                       </div>
-                    )}
-                  </div>
+                    
+                  </div>)}
                   {/* Instructions */}
                   <div className="flex-1 space-y-4">
                     {viewTemplateModal.measureDescription ? (
