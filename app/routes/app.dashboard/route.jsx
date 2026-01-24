@@ -1291,14 +1291,14 @@ export default function Dashboard() {
 
               {/* Custom Size - Details Content */}
               {effectiveMainTab === "Custom Size" && modalSubTab === "Details" && hasCustomTemplate && (
-                <div>
-                  <div className="space-y-6">
+                <div className="flex flex-col h-full -m-6">
+                  <div className="flex-1 overflow-auto p-6 space-y-6">
                     {/* Measurement Fields */}
                     <div className="space-y-4">
                       {customData?.fields?.map((field, index) => (
                         <div key={index} className="flex items-start gap-3">
-                          <div className="flex-1">
-                            <label className="flex items-center gap-2 mb-2 text-sm font-medium text-gray-700">
+                          <div className=" flex w-full gap-6">
+                            <label className="flex w-fit text-nowrap mr-2  items-center gap-2 mb-2 text-sm font-medium text-gray-700">
                               <span onClick={(e) => handleOpenMeasurementInfo(field, e)} className="cursor-pointer">
                                 <div className="w-5 h-5 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center flex-shrink-0 hover:bg-gray-200 transition-colors">
                                   <span className="text-xs text-gray-600 font-semibold">i</span>
@@ -1378,12 +1378,12 @@ export default function Dashboard() {
                     )}
                   </div>
                   
-                  {/* Close button at bottom */}
-                  <div className="mt-6 flex justify-end">
+                  {/* Close button - sticky at bottom */} 
+                  <div className="flex-shrink-0 flex justify-end border-t border-gray-200 p-4 bg-white sticky -bottom-6 z-10">
                     <button
                       type="button"
                       onClick={handleCloseViewModal}
-                      className="px-6 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                      className="px-6 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       Close
                     </button>
@@ -2235,7 +2235,7 @@ export default function Dashboard() {
 
             {/* Modal Footer - for custom templates */}
             {viewTemplateModal.fields && !viewTemplateModal.columns && (
-              <div className="flex justify-end px-6 py-4 border-t border-gray-200">
+              <div className="flex justify-end px-6 py-4 border-t border-gray-200 ">
                 <button
                   type="button"
                   onClick={handleCloseViewTemplate}
