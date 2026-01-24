@@ -20,6 +20,7 @@ export default function App() {
         <s-link href="/app/dashboard">Dashboard</s-link>
         <s-link href="/app/templates">Templates</s-link>
         <s-link href="/app/tailor">Custom Tailor</s-link>
+        <s-link href="/app/support">Support</s-link>
 
       </s-app-nav>
       <Outlet />
