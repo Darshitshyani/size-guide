@@ -76,6 +76,7 @@ model TailorTemplate {
   fitPreferences String? // JSON object for fit preference settings (label, allowance)
   collarOptions  String? // JSON array for collar settings (name, image)
   enableStitchingNotes Boolean @default(false)
+  customFeatures String? // JSON array for custom advanced features
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

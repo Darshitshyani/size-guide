@@ -161,11 +161,12 @@ export const action = async ({ request }) => {
         const fitPreferences = formData.get("fitPreferences");
         const collarOptions = formData.get("collarOptions");
         const enableStitchingNotes = formData.get("enableStitchingNotes") === "true";
+        const customFeatures = formData.get("customAdvancedFeatures");
 
         if (!name || !clothingType || !fields) return { error: "Missing required fields" };
 
         const template = await prisma.tailorTemplate.create({
-            data: { shop, name, gender, clothingType, fields, fitPreferences, collarOptions, enableStitchingNotes, isActive: true },
+            data: { shop, name, gender, clothingType, fields, fitPreferences, collarOptions, enableStitchingNotes, customFeatures, isActive: true },
         });
         return { success: true, template };
     }
@@ -177,6 +178,7 @@ export const action = async ({ request }) => {
         const fitPreferences = formData.get("fitPreferences");
         const collarOptions = formData.get("collarOptions");
         const enableStitchingNotes = formData.get("enableStitchingNotes");
+        const customFeatures = formData.get("customAdvancedFeatures");
 
         const updateData = {};
         if (name) updateData.name = name;
@@ -184,6 +186,7 @@ export const action = async ({ request }) => {
         if (fitPreferences) updateData.fitPreferences = fitPreferences;
         if (collarOptions) updateData.collarOptions = collarOptions;
         if (enableStitchingNotes !== null) updateData.enableStitchingNotes = enableStitchingNotes === "true";
+        if (customFeatures !== null) updateData.customFeatures = customFeatures;
 
         const template = await prisma.tailorTemplate.update({ where: { id }, data: updateData });
         return { success: true, template };
@@ -246,10 +249,15 @@ export default function CustomTailor() {
         { id: 2, name: "Band Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/band+collar%0D%0A%0D%0A.png", enabled: true },
         { id: 3, name: "Spread Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/spread+collar.png", enabled: true }
     ]);
+    const [customAdvancedFeatures, setCustomAdvancedFeatures] = useState([]);
+    const [newCustomFeatureName, setNewCustomFeatureName] = useState("");
+    const [deleteCustomFeatureConfirm, setDeleteCustomFeatureConfirm] = useState(null); // Feature pending deletion
+    const [previewSelectedCustomOptions, setPreviewSelectedCustomOptions] = useState({}); // { featureId: optionId }
     const [nameError, setNameError] = useState(false);
     const [duplicateNameError, setDuplicateNameError] = useState(false);
     const [fieldsError, setFieldsError] = useState(false);
     const [collarErrors, setCollarErrors] = useState({}); // { [id]: { name: bool, image: bool } }
+    const [customFeaturesErrors, setCustomFeaturesErrors] = useState({}); // { [featureId]: { [optionId]: { name: bool, image: bool } } }
 
     // Edit mode state
     const [isEditMode, setIsEditMode] = useState(false);
@@ -646,6 +654,7 @@ export default function CustomTailor() {
         setDuplicateNameError(false);
         setFieldsError(false);
         setCollarErrors({});
+        setCustomFeaturesErrors({});
 
         let hasValidationError = false;
 
@@ -661,6 +670,35 @@ export default function CustomTailor() {
         if (enabledFields.length === 0) {
             setFieldsError(true);
             hasValidationError = true;
+        }
+
+        // Validate custom advanced features
+        const enabledCustomFeatures = customAdvancedFeatures.filter(f => f.enabled);
+        if (enabledCustomFeatures.length > 0) {
+            const newCustomFeaturesErrors = {};
+            enabledCustomFeatures.forEach(feature => {
+                if (feature.options && feature.options.length > 0) {
+                    feature.options.forEach(option => {
+                        const optionErrors = {};
+                        if (!option.name || !option.name.trim()) {
+                            optionErrors.name = true;
+                        }
+                        if (!option.image && !option.file) {
+                            optionErrors.image = true;
+                        }
+                        if (Object.keys(optionErrors).length > 0) {
+                            if (!newCustomFeaturesErrors[feature.id]) {
+                                newCustomFeaturesErrors[feature.id] = {};
+                            }
+                            newCustomFeaturesErrors[feature.id][option.id] = optionErrors;
+                            hasValidationError = true;
+                        }
+                    });
+                }
+            });
+            if (Object.keys(newCustomFeaturesErrors).length > 0) {
+                setCustomFeaturesErrors(newCustomFeaturesErrors);
+            }
         }
 
         if (hasValidationError) return;
@@ -735,6 +773,11 @@ export default function CustomTailor() {
             formData.append("collarOptions", JSON.stringify(finalCollarOptions));
         }
         formData.append("enableStitchingNotes", enableStitchingNotes.toString());
+        
+        // Add custom advanced features
+        if (customAdvancedFeatures.length > 0) {
+            formData.append("customAdvancedFeatures", JSON.stringify(customAdvancedFeatures));
+        }
 
         fetcher.submit(formData, { method: "POST" });
     };
@@ -1170,6 +1213,285 @@ export default function CustomTailor() {
                                         </button>
                                     </div>
                                 )}
+
+                                {/* Custom Advanced Features */}
+                                {customAdvancedFeatures.length > 0 && (
+                                    <div className="border-t border-gray-200 pt-4 mt-4 space-y-4">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <p className="text-xs text-gray-500">Custom Features</p>
+                                            {Object.keys(customFeaturesErrors).length > 0 && (
+                                                <p className="text-xs text-red-500">Please fill all required fields</p>
+                                            )}
+                                        </div>
+                                        {customAdvancedFeatures.map((feature, featureIndex) => (
+                                            <div key={feature.id}>
+                                                <div className="flex items-center justify-between gap-3 mb-2">
+                                                    <label className="flex items-center gap-3 cursor-pointer flex-1">
+                                                        <div className={`relative w-10 h-5 rounded-full transition-colors ${feature.enabled ? "bg-blue-600" : "bg-gray-200"}`}>
+                                                            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${feature.enabled ? "translate-x-5" : ""}`} />
+                                                        </div>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={feature.enabled} 
+                                                            onChange={() => {
+                                                                setCustomAdvancedFeatures(prev => prev.map(f => {
+                                                                    if (f.id === feature.id) {
+                                                                        const newEnabled = !f.enabled;
+                                                                        // Add one default empty option when enabling and no options exist
+                                                                        if (newEnabled && (!f.options || f.options.length === 0)) {
+                                                                            return { ...f, enabled: newEnabled, options: [{ id: Date.now(), name: "", image: "" }] };
+                                                                        }
+                                                                        return { ...f, enabled: newEnabled };
+                                                                    }
+                                                                    return f;
+                                                                }));
+                                                            }} 
+                                                            className="sr-only" 
+                                                        />
+                                                        <span className="text-sm text-gray-700">{feature.name}</span>
+                                                    </label>
+                                                    <button
+                                                        onClick={() => setDeleteCustomFeatureConfirm(feature)}
+                                                        className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                                                        title="Remove feature"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                
+                                                {/* Options UI when feature is enabled */}
+                                                {feature.enabled && (
+                                                    <div className="pl-8 space-y-3">
+                                                        {(feature.options || []).map((option, optionIndex) => (
+                                                            <div key={option.id} className={`flex items-start gap-4 p-3 border rounded-lg bg-gray-50/50 hover:border-gray-200 transition-colors ${
+                                                                customFeaturesErrors[feature.id]?.[option.id] ? 'border-red-300 bg-red-50/30' : 'border-gray-100'
+                                                            }`}>
+                                                                {/* Image Upload Box */}
+                                                                <div className="relative flex-shrink-0">
+                                                                    <div className={`w-24 h-24 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden bg-white hover:border-blue-500 transition-colors cursor-pointer ${
+                                                                        customFeaturesErrors[feature.id]?.[option.id]?.image ? 'border-red-400' : 'border-gray-300'
+                                                                    }`}>
+                                                                        {(option.file || option.image) ? (
+                                                                            <img src={option.file ? URL.createObjectURL(option.file) : option.image} alt={option.name} className="w-full h-full object-contain p-1" />
+                                                                        ) : (
+                                                                            <div className="flex flex-col items-center gap-1">
+                                                                                <svg className={`w-6 h-6 ${customFeaturesErrors[feature.id]?.[option.id]?.image ? 'text-red-300' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                                                </svg>
+                                                                                <span className={`text-[10px] ${customFeaturesErrors[feature.id]?.[option.id]?.image ? 'text-red-400' : 'text-gray-400'}`}>Upload</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    <input
+                                                                        type="file"
+                                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                                        accept="image/*"
+                                                                        onChange={(e) => {
+                                                                            const file = e.target.files?.[0];
+                                                                            if (file) {
+                                                                                setCustomAdvancedFeatures(prev => prev.map(f => {
+                                                                                    if (f.id === feature.id) {
+                                                                                        const newOptions = [...(f.options || [])];
+                                                                                        newOptions[optionIndex] = { ...newOptions[optionIndex], file };
+                                                                                        return { ...f, options: newOptions };
+                                                                                    }
+                                                                                    return f;
+                                                                                }));
+                                                                                // Clear image error when file is uploaded
+                                                                                if (customFeaturesErrors[feature.id]?.[option.id]?.image) {
+                                                                                    setCustomFeaturesErrors(prev => {
+                                                                                        const newErrors = { ...prev };
+                                                                                        if (newErrors[feature.id]?.[option.id]) {
+                                                                                            delete newErrors[feature.id][option.id].image;
+                                                                                            if (Object.keys(newErrors[feature.id][option.id]).length === 0) {
+                                                                                                delete newErrors[feature.id][option.id];
+                                                                                            }
+                                                                                            if (Object.keys(newErrors[feature.id]).length === 0) {
+                                                                                                delete newErrors[feature.id];
+                                                                                            }
+                                                                                        }
+                                                                                        return newErrors;
+                                                                                    });
+                                                                                }
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                
+                                                                {/* Name and URL inputs */}
+                                                                <div className="flex-1 space-y-2">
+                                                                    <div>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={option.name}
+                                                                            onChange={(e) => {
+                                                                                setCustomAdvancedFeatures(prev => prev.map(f => {
+                                                                                    if (f.id === feature.id) {
+                                                                                        const newOptions = [...(f.options || [])];
+                                                                                        newOptions[optionIndex] = { ...newOptions[optionIndex], name: e.target.value };
+                                                                                        return { ...f, options: newOptions };
+                                                                                    }
+                                                                                    return f;
+                                                                                }));
+                                                                                // Clear name error when typing
+                                                                                if (e.target.value.trim() && customFeaturesErrors[feature.id]?.[option.id]?.name) {
+                                                                                    setCustomFeaturesErrors(prev => {
+                                                                                        const newErrors = { ...prev };
+                                                                                        if (newErrors[feature.id]?.[option.id]) {
+                                                                                            delete newErrors[feature.id][option.id].name;
+                                                                                            if (Object.keys(newErrors[feature.id][option.id]).length === 0) {
+                                                                                                delete newErrors[feature.id][option.id];
+                                                                                            }
+                                                                                            if (Object.keys(newErrors[feature.id]).length === 0) {
+                                                                                                delete newErrors[feature.id];
+                                                                                            }
+                                                                                        }
+                                                                                        return newErrors;
+                                                                                    });
+                                                                                }
+                                                                            }}
+                                                                            placeholder="Option name"
+                                                                            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
+                                                                                customFeaturesErrors[feature.id]?.[option.id]?.name ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                                                                            }`}
+                                                                        />
+                                                                        {customFeaturesErrors[feature.id]?.[option.id]?.name && (
+                                                                            <p className="text-xs text-red-500 mt-1">Option name is required</p>
+                                                                        )}
+                                                                    </div>
+                                                                    <div>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={option.image || ""}
+                                                                            onChange={(e) => {
+                                                                                setCustomAdvancedFeatures(prev => prev.map(f => {
+                                                                                    if (f.id === feature.id) {
+                                                                                        const newOptions = [...(f.options || [])];
+                                                                                        newOptions[optionIndex] = { ...newOptions[optionIndex], image: e.target.value };
+                                                                                        return { ...f, options: newOptions };
+                                                                                    }
+                                                                                    return f;
+                                                                                }));
+                                                                                // Clear image error when URL is entered
+                                                                                if (e.target.value.trim() && customFeaturesErrors[feature.id]?.[option.id]?.image) {
+                                                                                    setCustomFeaturesErrors(prev => {
+                                                                                        const newErrors = { ...prev };
+                                                                                        if (newErrors[feature.id]?.[option.id]) {
+                                                                                            delete newErrors[feature.id][option.id].image;
+                                                                                            if (Object.keys(newErrors[feature.id][option.id]).length === 0) {
+                                                                                                delete newErrors[feature.id][option.id];
+                                                                                            }
+                                                                                            if (Object.keys(newErrors[feature.id]).length === 0) {
+                                                                                                delete newErrors[feature.id];
+                                                                                            }
+                                                                                        }
+                                                                                        return newErrors;
+                                                                                    });
+                                                                                }
+                                                                            }}
+                                                                            placeholder="Paste image URL or upload"
+                                                                            className={`w-full px-3 py-1 text-xs bg-white border rounded focus:outline-none focus:ring-1 focus:border-blue-500 focus:ring-blue-500 text-gray-500 ${
+                                                                                customFeaturesErrors[feature.id]?.[option.id]?.image ? 'border-red-400 bg-red-50' : 'border-gray-200'
+                                                                            }`}
+                                                                        />
+                                                                        {customFeaturesErrors[feature.id]?.[option.id]?.image && (
+                                                                            <p className="text-xs text-red-500 mt-1">Image is required (upload or URL)</p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                {/* Delete Button */}
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setCustomAdvancedFeatures(prev => prev.map(f => {
+                                                                            if (f.id === feature.id) {
+                                                                                return { ...f, options: (f.options || []).filter((_, i) => i !== optionIndex) };
+                                                                            }
+                                                                            return f;
+                                                                        }));
+                                                                    }}
+                                                                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                                                                    title="Remove Option"
+                                                                >
+                                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                                    </svg>
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                        
+                                                        {/* Add Option Button */}
+                                                        <button
+                                                            onClick={() => {
+                                                                setCustomAdvancedFeatures(prev => prev.map(f => {
+                                                                    if (f.id === feature.id) {
+                                                                        return { 
+                                                                            ...f, 
+                                                                            options: [...(f.options || []), { id: Date.now(), name: "", image: "" }] 
+                                                                        };
+                                                                    }
+                                                                    return f;
+                                                                }));
+                                                            }}
+                                                            className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 cursor-pointer"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                            </svg>
+                                                            Add Option
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Add Custom Feature */}
+                                <div className="border-t border-gray-200 pt-4 mt-4">
+                                    <p className="text-xs text-gray-500 mb-2">Add Custom Feature</p>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            value={newCustomFeatureName}
+                                            onChange={(e) => setNewCustomFeatureName(e.target.value)}
+                                            placeholder="Enter feature name (e.g., Pocket Style)"
+                                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" && newCustomFeatureName.trim()) {
+                                                    setCustomAdvancedFeatures(prev => [...prev, {
+                                                        id: Date.now(),
+                                                        name: newCustomFeatureName.trim(),
+                                                        enabled: false,
+                                                        options: []
+                                                    }]);
+                                                    setNewCustomFeatureName("");
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                if (newCustomFeatureName.trim()) {
+                                                    setCustomAdvancedFeatures(prev => [...prev, {
+                                                        id: Date.now(),
+                                                        name: newCustomFeatureName.trim(),
+                                                        enabled: false,
+                                                        options: []
+                                                    }]);
+                                                    setNewCustomFeatureName("");
+                                                }
+                                            }}
+                                            disabled={!newCustomFeatureName.trim()}
+                                            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${newCustomFeatureName.trim() 
+                                                ? "bg-blue-600 text-white hover:bg-blue-700 cursor-pointer" 
+                                                : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
+                                        >
+                                            Add
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1855,6 +2177,69 @@ export default function CustomTailor() {
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* Custom Advanced Features Preview */}
+                                    {customAdvancedFeatures.filter(f => f.enabled && f.options && f.options.length > 0).map((feature) => (
+                                        <div key={feature.id} className="border-t border-gray-100 pt-6 pb-4">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <h3 className="text-sm font-medium text-gray-900">{feature.name}</h3>
+                                                {previewSelectedCustomOptions[feature.id] && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPreviewSelectedCustomOptions(prev => {
+                                                            const newState = { ...prev };
+                                                            delete newState[feature.id];
+                                                            return newState;
+                                                        })}
+                                                        className="text-sm text-red-600 hover:text-red-700 font-medium hover:underline px-2 py-1 cursor-pointer"
+                                                    >
+                                                        Clear Selection
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                {feature.options.map((option) => (
+                                                    <div
+                                                        key={option.id}
+                                                        onClick={() => {
+                                                            if (previewSelectedCustomOptions[feature.id] === option.id) {
+                                                                setPreviewSelectedCustomOptions(prev => {
+                                                                    const newState = { ...prev };
+                                                                    delete newState[feature.id];
+                                                                    return newState;
+                                                                });
+                                                            } else {
+                                                                setPreviewSelectedCustomOptions(prev => ({
+                                                                    ...prev,
+                                                                    [feature.id]: option.id
+                                                                }));
+                                                            }
+                                                        }}
+                                                        className={`cursor-pointer border rounded-lg p-2 text-center transition-all hover:bg-gray-50 ${
+                                                            previewSelectedCustomOptions[feature.id] === option.id
+                                                                ? 'border-gray-400 text-gray-700 bg-gray-100'
+                                                                : 'border-gray-200'
+                                                        }`}
+                                                    >
+                                                        <div className={`w-full h-24 mb-2 bg-white rounded flex items-center justify-center overflow-hidden border ${
+                                                            previewSelectedCustomOptions[feature.id] === option.id ? 'border-gray-300' : 'border-gray-100'
+                                                        }`}>
+                                                            {(option.file || option.image) ? (
+                                                                <img 
+                                                                    src={option.file ? URL.createObjectURL(option.file) : option.image} 
+                                                                    alt={option.name} 
+                                                                    className="h-full w-full object-contain p-2" 
+                                                                />
+                                                            ) : (
+                                                                <span className="text-xs text-gray-400">No Image</span>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-sm font-medium">{option.name || "Unnamed"}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </>
                             )}
 
@@ -2054,6 +2439,42 @@ export default function CustomTailor() {
                                     className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 cursor-pointer"
                                 >
                                     Discard
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Custom Feature Confirmation Modal */}
+            {deleteCustomFeatureConfirm && (
+                <div className="fixed inset-0 bg-black/50 z-[700] flex items-center justify-center">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-sm">
+                        <div className="p-5">
+                            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+                                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">Delete Custom Feature?</h3>
+                            <p className="text-sm text-gray-500 text-center mb-6">
+                                Are you sure you want to delete "<span className="font-medium text-gray-700">{deleteCustomFeatureConfirm.name}</span>"? This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setDeleteCustomFeatureConfirm(null)}
+                                    className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setCustomAdvancedFeatures(prev => prev.filter(f => f.id !== deleteCustomFeatureConfirm.id));
+                                        setDeleteCustomFeatureConfirm(null);
+                                    }}
+                                    className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 cursor-pointer"
+                                >
+                                    Delete
                                 </button>
                             </div>
                         </div>
