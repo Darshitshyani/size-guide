@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "b8b2a686418652eae69e3fa6fe1f5b01"
-name = "size-guide"
+name = "Tailor size guide"
 application_url = "https://size-guide.fly.dev"
 embedded = true
 
@@ -13,7 +13,7 @@ api_version = "2026-04"
 
   [[webhooks.subscriptions]]
   topics = [ "app/uninstalled" ]
-  uri = "/webhooks/app/uninstalled"
+  uri = "/webhooks/app/uninstalled" 
 
   [[webhooks.subscriptions]]
   topics = [ "app/scopes_update" ]

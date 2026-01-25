@@ -287,6 +287,9 @@ export default function CustomTailor() {
     const [draggedFieldId, setDraggedFieldId] = useState(null); // Track which field is being dragged
     const [previewActiveTab, setPreviewActiveTab] = useState("details"); // "details" or "howto" for preview modal tabs
     const [previewSelectedFit, setPreviewSelectedFit] = useState(null); // Selected fit preference in preview modal
+    const [previewCurrentStep, setPreviewCurrentStep] = useState(0); // Current step in measurement flow
+    const [previewMeasurementValues, setPreviewMeasurementValues] = useState({}); // Store measurement values { fieldId: value }
+    const [previewStitchingNotes, setPreviewStitchingNotes] = useState(""); // Stitching notes value
 
     const products = shopifyProducts || [];
 
@@ -802,6 +805,16 @@ export default function CustomTailor() {
 
     return (
         <div className="w-full min-h-screen bg-gray-50">
+            {/* Hide scrollbar CSS */}
+            <style>{`
+                .hide-scrollbar::-webkit-scrollbar {
+                    display: none;
+                }
+                .hide-scrollbar {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
+            `}</style>
             {/* Header */}
             <div className="p-6">
                 {/* Title Section */}
@@ -1503,7 +1516,15 @@ export default function CustomTailor() {
                             <div className="border border-gray-100 rounded-lg p-6 bg-gray-50 flex flex-col items-start justify-center ">
 
                                 <button
-                                    onClick={() => setShowPreviewModal(true)}
+                                    onClick={() => {
+                                        setPreviewCurrentStep(0);
+                                        setPreviewMeasurementValues({});
+                                        setPreviewSelectedFit(null);
+                                        setPreviewSelectedCollar(null);
+                                        setPreviewSelectedCustomOptions({});
+                                        setPreviewStitchingNotes("");
+                                        setShowPreviewModal(true);
+                                    }}
                                     className="px-6 py-3 bg-[#1F2937] text-white text-sm font-semibold rounded shadow-sm hover:bg-gray-800 transition-colors w-full cursor-pointer"
                                 >
                                     Custom order
@@ -1991,316 +2012,618 @@ export default function CustomTailor() {
                         if (e.target === e.currentTarget) setShowPreviewModal(false);
                     }}
                 >
-                    <div
-                        className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col"
-                        onClick={() => {
-                            // When clicking strictly inside the main white modal area (not on a specific input/card),
-                            // we want to potentially deselect. However, catching this efficiently is hard with bubbling.
-                            // simpler approach: The content area specific handler is better.
-                        }}
-                    >
-                        {/* Header */}
-                        <div className="flex items-center justify-between p-5 border-b border-gray-200">
-                            <div className="flex items-center gap-3">
-                                <svg className="w-6 h-6 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                                </svg>
-                                <h2 className="text-lg font-bold text-gray-900">Enter Your Measurements</h2>
-                            </div>
-                            <button onClick={() => setShowPreviewModal(false)} className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer">
-                                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        {/* Tabs */}
-                        <div className="flex border-b border-gray-200 px-5">
-                            <button
-                                onClick={() => setPreviewActiveTab("details")}
-                                className={`py-3 px-1 text-sm font-medium mr-6 cursor-pointer border-b-2 transition-colors ${previewActiveTab === "details"
-                                    ? "text-gray-900 border-gray-900"
-                                    : "text-gray-500 border-transparent hover:text-gray-700"
-                                    }`}
-                            >
-                                Details
-                            </button>
-                            <button
-                                onClick={() => setPreviewActiveTab("howto")}
-                                className={`py-3 px-1 text-sm font-medium cursor-pointer border-b-2 transition-colors ${previewActiveTab === "howto"
-                                    ? "text-gray-900 border-gray-900"
-                                    : "text-gray-500 border-transparent hover:text-gray-700"
-                                    }`}
-                            >
-                                How to Measure
-                            </button>
-                        </div>
-
-                        {/* Content */}
-                        <div
-                            className="flex-1 overflow-auto p-6 space-y-4"
-                            onClick={(e) => {
-                                // Deselect collar when clicking on empty space in the content area
-                                const target = e.target;
-                                const isInteractive = target.closest('input') ||
-                                    target.closest('button') ||
-                                    target.closest('label') ||
-                                    target.closest('textarea') ||
-                                    target.closest('.collar-option-card') ||
-                                    target.closest('.clear-selection-btn');
-                                if (!isInteractive) {
-                                    setPreviewSelectedCollar(null);
-                                }
-                            }}
-                        >
-                            {/* Details Tab Content */}
-                            {previewActiveTab === "details" && (
-                                <>
-                                    {measurementFields.filter(f => f.enabled).map((field) => (
-                                        <div key={field.id} className="flex items-center gap-4">
-                                            {/* Info Icon */}
-                                            <div className="flex items-center gap-2 min-w-[130px]">
-                                                <button
-                                                    onClick={() => setInfoModalField(field)}
-                                                    className="text-gray-400 hover:text-blue-500 transition-colors cursor-pointer"
-                                                    title="View Instructions"
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                    </svg>
-                                                </button>
-
-                                                {/* Label */}
-                                                <label className="text-sm font-medium text-gray-700 field-label">
-                                                    {field.name} {field.required && <span className="text-red-500">*</span>}
-                                                </label>
-                                            </div>
-                                            {/* Input */}
-                                            <input
-                                                type="text"
-                                                placeholder={`Enter ${field.name.toLowerCase()}`}
-                                                className=" w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400"
+                    {(() => {
+                        const enabledFields = measurementFields.filter(f => f.enabled);
+                        const totalMeasurementSteps = enabledFields.length;
+                        
+                        // Calculate total steps: measurements + advanced options (if any) + review step
+                        const hasAdvancedOptions = enableFitPreference || enableStitchingNotes || enableCollarOption || customAdvancedFeatures.filter(f => f.enabled && f.options?.length > 0).length > 0;
+                        const advancedOptionsStep = hasAdvancedOptions ? 1 : 0;
+                        const reviewStep = 1; // Always have a review step
+                        const totalSteps = totalMeasurementSteps + advancedOptionsStep + reviewStep;
+                        
+                        const currentField = enabledFields[previewCurrentStep];
+                        const isOnMeasurementStep = previewCurrentStep < totalMeasurementSteps;
+                        const isOnAdvancedStep = previewCurrentStep === totalMeasurementSteps && hasAdvancedOptions;
+                        const isOnReviewStep = previewCurrentStep === totalMeasurementSteps + advancedOptionsStep;
+                        
+                        return (
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+                                {/* Header */}
+                                <div className="px-5 pt-4 pb-3 border-b border-gray-100">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h2 className="text-gray-900 font-semibold text-base">Custom Measurements</h2>
+                                        <button 
+                                            onClick={() => {
+                                                setShowPreviewModal(false);
+                                                setPreviewCurrentStep(0);
+                                                setPreviewMeasurementValues({});
+                                                setPreviewSelectedFit(null);
+                                                setPreviewSelectedCollar(null);
+                                                setPreviewSelectedCustomOptions({});
+                                                setPreviewStitchingNotes("");
+                                            }} 
+                                            className="p-1.5 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                                        >
+                                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    
+                                    {/* Step Progress - Clean dots with line */}
+                                    {totalMeasurementSteps > 0 && (
+                                        <div className="relative">
+                                            {/* Progress line background */}
+                                            <div className="absolute top-3 left-0 right-0 h-0.5 bg-gray-200 rounded-full" />
+                                            {/* Progress line filled */}
+                                            <div 
+                                                className="absolute top-3 left-0 h-0.5 bg-green-500 rounded-full transition-all duration-300"
+                                                style={{ 
+                                                    width: `${(previewCurrentStep / (totalSteps - 1)) * 100}%` 
+                                                }}
                                             />
-                                        </div>
-                                    ))}
-                                    {measurementFields.filter(f => f.enabled).length === 0 && (
-                                        <p className="text-center text-gray-500 py-8">No measurement fields enabled for this template.</p>
-                                    )}
-
-                                    {enableFitPreference && (
-                                        <div className="border-t border-gray-100 pt-6">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <h3 className="text-sm font-medium text-gray-900">Fit Preference</h3>
-                                                {previewSelectedFit !== null && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setPreviewSelectedFit(null)}
-                                                        className="text-sm text-red-600 hover:text-red-700 font-medium hover:underline px-2 py-1 cursor-pointer clear-selection-btn"
-                                                    >
-                                                        Clear Selection
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <div className="grid grid-cols-3 gap-3">
-                                                {fitPreferences.filter(f => f.enabled).map((fit) => (
-                                                    <label key={fit.id} className="cursor-pointer fit-preference-option">
-                                                        <input
-                                                            type="radio"
-                                                            name="fit_preference"
-                                                            className="peer sr-only"
-                                                            checked={previewSelectedFit === fit.id}
-                                                            onChange={() => setPreviewSelectedFit(fit.id)}
-                                                        />
-                                                        <div className="text-center py-2 px-1 border border-gray-200 rounded-md text-sm text-gray-600 peer-checked:bg-gray-900 peer-checked:text-white peer-checked:border-gray-900 transition-all hover:bg-gray-50 peer-checked:hover:bg-gray-800 flex flex-col items-center justify-center min-h-[60px]">
-                                                            <span className="font-medium">{fit.label}</span>
-                                                            <span className="text-[10px] opacity-70">({fit.allowance})</span>
-                                                        </div>
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {enableStitchingNotes && (
-                                        <div className="border-t border-gray-100 pt-6">
-                                            <h3 className="text-sm font-medium text-gray-900 mb-3">Stitching Notes</h3>
-                                            <textarea
-                                                placeholder="Add any specific instructions for stitching..."
-                                                rows={3}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400 resize-none"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {enableCollarOption && (
-                                        <div className="border-t border-gray-100 pt-6 pb-4">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <h3 className="text-sm font-medium text-gray-900">Collar Option</h3>
-                                                {previewSelectedCollar !== null && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setPreviewSelectedCollar(null)}
-                                                        className="text-sm text-red-600 hover:text-red-700 font-medium hover:underline px-2 py-1 cursor-pointer"
-                                                    >
-                                                        Clear Selection
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <div className="grid grid-cols-3 gap-3">
-                                                {collarOptions.filter(c => c.enabled).map((collar) => (
-                                                    <div
-                                                        key={collar.id}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation(); // Prevent parent click handler from clearing selection
-                                                            if (previewSelectedCollar === collar.id) {
-                                                                setPreviewSelectedCollar(null);
-                                                            } else {
-                                                                setPreviewSelectedCollar(collar.id);
-                                                            }
-                                                        }}
-                                                        className={`collar-option-card cursor-pointer border rounded-lg p-2 text-center transition-all hover:bg-gray-50 ${previewSelectedCollar === collar.id
-                                                            ? 'border-gray-400 text-gray-700 bg-gray-100'
-                                                            : 'border-gray-200'
-                                                            }`}
-                                                    >
-                                                        <div className={`w-full h-24 mb-2 bg-white rounded flex items-center justify-center overflow-hidden border ${previewSelectedCollar === collar.id ? 'border-gray-300' : 'border-gray-100'
+                                            
+                                            {/* Step dots */}
+                                            <div className="relative flex justify-between">
+                                                {enabledFields.map((field, index) => {
+                                                    const isCompleted = index < previewCurrentStep || previewMeasurementValues[field.id];
+                                                    const isCurrent = index === previewCurrentStep;
+                                                    
+                                                    return (
+                                                        <button
+                                                            key={field.id}
+                                                            onClick={() => setPreviewCurrentStep(index)}
+                                                            className="flex flex-col items-center cursor-pointer group"
+                                                            title={field.name}
+                                                        >
+                                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                                                                isCurrent 
+                                                                    ? 'bg-gray-900 text-white ring-4 ring-gray-900/20' 
+                                                                    : isCompleted
+                                                                        ? 'bg-green-500 text-white'
+                                                                        : 'bg-white border-2 border-gray-300 text-gray-400 group-hover:border-gray-400'
                                                             }`}>
-                                                            {collar.image ? (
-                                                                <img src={collar.image} alt={collar.name} className="h-full w-full object-contain p-2" />
+                                                                {isCompleted && !isCurrent ? (
+                                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                ) : (
+                                                                    <span className="text-[10px] font-bold">{index + 1}</span>
+                                                                )}
+                                                            </div>
+                                                            <span className={`mt-1.5 text-[10px] font-medium max-w-[50px] truncate ${
+                                                                isCurrent ? 'text-gray-900' : 'text-gray-500'
+                                                            }`}>
+                                                                {field.name}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                                
+                                                {/* Options step */}
+                                                {hasAdvancedOptions && (
+                                                    <button
+                                                        onClick={() => setPreviewCurrentStep(totalMeasurementSteps)}
+                                                        className="flex flex-col items-center cursor-pointer group"
+                                                        title="Options"
+                                                    >
+                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                                                            isOnAdvancedStep 
+                                                                ? 'bg-gray-900 text-white ring-4 ring-gray-900/20' 
+                                                                : previewCurrentStep > totalMeasurementSteps
+                                                                    ? 'bg-green-500 text-white'
+                                                                    : 'bg-white border-2 border-gray-300 text-gray-400 group-hover:border-gray-400'
+                                                        }`}>
+                                                            {previewCurrentStep > totalMeasurementSteps ? (
+                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                </svg>
                                                             ) : (
-                                                                <span className="text-xs text-gray-400">No Image</span>
+                                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                                                                </svg>
                                                             )}
                                                         </div>
-                                                        <span className="text-sm font-medium">{collar.name}</span>
+                                                        <span className={`mt-1.5 text-[10px] font-medium ${
+                                                            isOnAdvancedStep ? 'text-gray-900' : 'text-gray-500'
+                                                        }`}>
+                                                            Options
+                                                        </span>
+                                                    </button>
+                                                )}
+                                                
+                                                {/* Review step */}
+                                                <button
+                                                    onClick={() => setPreviewCurrentStep(totalMeasurementSteps + advancedOptionsStep)}
+                                                    className="flex flex-col items-center cursor-pointer group"
+                                                    title="Review"
+                                                >
+                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                                                        isOnReviewStep 
+                                                            ? 'bg-gray-900 text-white ring-4 ring-gray-900/20' 
+                                                            : 'bg-white border-2 border-gray-300 text-gray-400 group-hover:border-gray-400'
+                                                    }`}>
+                                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                        </svg>
                                                     </div>
-                                                ))}
+                                                    <span className={`mt-1.5 text-[10px] font-medium ${
+                                                        isOnReviewStep ? 'text-gray-900' : 'text-gray-500'
+                                                    }`}>
+                                                        Review
+                                                    </span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Content */}
+                                <div className="flex-1 overflow-auto">
+                                    {/* Measurement Step */}
+                                    {isOnMeasurementStep && currentField && (
+                                        <div className="p-6">
+                                            {/* Title */}
+                                            <div className="text-center mb-4">
+                                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Step {previewCurrentStep + 1} of {totalSteps}</p>
+                                                <h2 className="text-xl font-bold text-gray-900">
+                                                    {currentField.name}
+                                                    {currentField.required && <span className="text-red-500 ml-1">*</span>}
+                                                </h2>
+                                            </div>
+
+                                            {/* Guide Image */}
+                                            <div className="w-full h-52 mb-5 flex items-center justify-center bg-gradient-to-b from-gray-50 to-white rounded-xl border border-gray-100">
+                                                {(currentField.file || currentField.image) ? (
+                                                    <img 
+                                                        src={currentField.file ? URL.createObjectURL(currentField.file) : currentField.image} 
+                                                        alt={`How to measure ${currentField.name}`}
+                                                        className="max-w-full max-h-full object-contain p-4"
+                                                    />
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-2 text-gray-300">
+                                                        <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                        </svg>
+                                                        <span className="text-sm">No guide image</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Measurement Instructions Card */}
+                                            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-5">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                                        <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-sm font-semibold text-blue-900 mb-1">How to Measure</h3>
+                                                        <p className="text-sm text-blue-800 leading-relaxed">
+                                                            {currentField.instruction || "Follow the guide image to take this measurement."}
+                                                        </p>
+                                                        {currentField.range && (
+                                                            <p className="text-xs text-blue-600 mt-2 font-medium">
+                                                                Expected range: {currentField.range} {currentField.unit}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Input Field */}
+                                            <div className="space-y-3">
+                                                <label className="text-sm font-medium text-gray-700">Enter your measurement ({currentField.unit})</label>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex-1 relative">
+                                                        <input
+                                                            type="text"
+                                                            value={previewMeasurementValues[currentField.id] || ""}
+                                                            onChange={(e) => setPreviewMeasurementValues(prev => ({
+                                                                ...prev,
+                                                                [currentField.id]: e.target.value
+                                                            }))}
+                                                            placeholder="Enter value"
+                                                            className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent placeholder-gray-400 transition-all"
+                                                        />
+                                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currentField.unit}</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
 
-                                    {/* Custom Advanced Features Preview */}
-                                    {customAdvancedFeatures.filter(f => f.enabled && f.options && f.options.length > 0).map((feature) => (
-                                        <div key={feature.id} className="border-t border-gray-100 pt-6 pb-4">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <h3 className="text-sm font-medium text-gray-900">{feature.name}</h3>
-                                                {previewSelectedCustomOptions[feature.id] && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setPreviewSelectedCustomOptions(prev => {
-                                                            const newState = { ...prev };
-                                                            delete newState[feature.id];
-                                                            return newState;
-                                                        })}
-                                                        className="text-sm text-red-600 hover:text-red-700 font-medium hover:underline px-2 py-1 cursor-pointer"
-                                                    >
-                                                        Clear Selection
-                                                    </button>
-                                                )}
+                                    {/* Advanced Options Step */}
+                                    {isOnAdvancedStep && (
+                                        <div className="p-6 space-y-5">
+                                            <div className="text-center mb-2">
+                                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Final Step</p>
+                                                <h2 className="text-xl font-bold text-gray-900">Additional Options</h2>
+                                                <p className="text-sm text-gray-500 mt-1">Customize your order preferences</p>
                                             </div>
-                                            <div className="grid grid-cols-3 gap-3">
-                                                {feature.options.map((option) => (
-                                                    <div
-                                                        key={option.id}
-                                                        onClick={() => {
-                                                            if (previewSelectedCustomOptions[feature.id] === option.id) {
-                                                                setPreviewSelectedCustomOptions(prev => {
+
+                                            {/* Fit Preference */}
+                                            {enableFitPreference && (
+                                                <div className="bg-gray-50 rounded-xl p-4">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <h3 className="text-sm font-semibold text-gray-900">Fit Preference</h3>
+                                                        {previewSelectedFit !== null && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPreviewSelectedFit(null)}
+                                                                className="text-xs text-red-600 hover:text-red-700 font-medium cursor-pointer"
+                                                            >
+                                                                Clear
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        {fitPreferences.filter(f => f.enabled).map((fit) => (
+                                                            <label key={fit.id} className="cursor-pointer">
+                                                                <input
+                                                                    type="radio"
+                                                                    name="fit_preference"
+                                                                    className="peer sr-only"
+                                                                    checked={previewSelectedFit === fit.id}
+                                                                    onChange={() => setPreviewSelectedFit(fit.id)}
+                                                                />
+                                                                <div className="text-center py-2.5 px-1 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 peer-checked:bg-gray-900 peer-checked:text-white peer-checked:border-gray-900 transition-all hover:border-gray-300 peer-checked:hover:bg-gray-800 flex flex-col items-center justify-center min-h-[56px]">
+                                                                    <span className="font-medium text-xs">{fit.label}</span>
+                                                                    <span className="text-[10px] opacity-70">({fit.allowance})</span>
+                                                                </div>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Stitching Notes */}
+                                            {enableStitchingNotes && (
+                                                <div className="bg-gray-50 rounded-xl p-4">
+                                                    <h3 className="text-sm font-semibold text-gray-900 mb-2">Stitching Notes</h3>
+                                                    <textarea
+                                                        value={previewStitchingNotes}
+                                                        onChange={(e) => setPreviewStitchingNotes(e.target.value)}
+                                                        placeholder="Add any specific instructions for the tailor..."
+                                                        rows={2}
+                                                        className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent placeholder-gray-400 resize-none"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {/* Collar Option */}
+                                            {enableCollarOption && (
+                                                <div className="bg-gray-50 rounded-xl p-4">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <h3 className="text-sm font-semibold text-gray-900">Collar Style</h3>
+                                                        {previewSelectedCollar !== null && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPreviewSelectedCollar(null)}
+                                                                className="text-xs text-red-600 hover:text-red-700 font-medium cursor-pointer"
+                                                            >
+                                                                Clear
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        {collarOptions.filter(c => c.enabled).map((collar) => (
+                                                            <div
+                                                                key={collar.id}
+                                                                onClick={() => {
+                                                                    if (previewSelectedCollar === collar.id) {
+                                                                        setPreviewSelectedCollar(null);
+                                                                    } else {
+                                                                        setPreviewSelectedCollar(collar.id);
+                                                                    }
+                                                                }}
+                                                                className={`cursor-pointer bg-white border-2 rounded-xl p-2 text-center transition-all ${previewSelectedCollar === collar.id
+                                                                    ? 'border-gray-900 shadow-sm'
+                                                                    : 'border-gray-200 hover:border-gray-300'
+                                                                }`}
+                                                            >
+                                                                <div className="w-full h-14 mb-1.5 rounded-lg flex items-center justify-center overflow-hidden bg-gray-50">
+                                                                    {collar.image ? (
+                                                                        <img src={collar.image} alt={collar.name} className="h-full w-full object-contain p-1" />
+                                                                    ) : (
+                                                                        <span className="text-[10px] text-gray-400">No Image</span>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-xs font-medium text-gray-700">{collar.name}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Custom Advanced Features */}
+                                            {customAdvancedFeatures.filter(f => f.enabled && f.options?.length > 0).map((feature) => (
+                                                <div key={feature.id} className="bg-gray-50 rounded-xl p-4">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <h3 className="text-sm font-semibold text-gray-900">{feature.name}</h3>
+                                                        {previewSelectedCustomOptions[feature.id] && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPreviewSelectedCustomOptions(prev => {
                                                                     const newState = { ...prev };
                                                                     delete newState[feature.id];
                                                                     return newState;
-                                                                });
-                                                            } else {
-                                                                setPreviewSelectedCustomOptions(prev => ({
-                                                                    ...prev,
-                                                                    [feature.id]: option.id
-                                                                }));
-                                                            }
-                                                        }}
-                                                        className={`cursor-pointer border rounded-lg p-2 text-center transition-all hover:bg-gray-50 ${
-                                                            previewSelectedCustomOptions[feature.id] === option.id
-                                                                ? 'border-gray-400 text-gray-700 bg-gray-100'
-                                                                : 'border-gray-200'
-                                                        }`}
-                                                    >
-                                                        <div className={`w-full h-24 mb-2 bg-white rounded flex items-center justify-center overflow-hidden border ${
-                                                            previewSelectedCustomOptions[feature.id] === option.id ? 'border-gray-300' : 'border-gray-100'
-                                                        }`}>
-                                                            {(option.file || option.image) ? (
-                                                                <img 
-                                                                    src={option.file ? URL.createObjectURL(option.file) : option.image} 
-                                                                    alt={option.name} 
-                                                                    className="h-full w-full object-contain p-2" 
-                                                                />
-                                                            ) : (
-                                                                <span className="text-xs text-gray-400">No Image</span>
-                                                            )}
-                                                        </div>
-                                                        <span className="text-sm font-medium">{option.name || "Unnamed"}</span>
+                                                                })}
+                                                                className="text-xs text-red-600 hover:text-red-700 font-medium cursor-pointer"
+                                                            >
+                                                                Clear
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                ))}
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        {feature.options.map((option) => (
+                                                            <div
+                                                                key={option.id}
+                                                                onClick={() => {
+                                                                    if (previewSelectedCustomOptions[feature.id] === option.id) {
+                                                                        setPreviewSelectedCustomOptions(prev => {
+                                                                            const newState = { ...prev };
+                                                                            delete newState[feature.id];
+                                                                            return newState;
+                                                                        });
+                                                                    } else {
+                                                                        setPreviewSelectedCustomOptions(prev => ({
+                                                                            ...prev,
+                                                                            [feature.id]: option.id
+                                                                        }));
+                                                                    }
+                                                                }}
+                                                                className={`cursor-pointer bg-white border-2 rounded-xl p-2 text-center transition-all ${
+                                                                    previewSelectedCustomOptions[feature.id] === option.id
+                                                                        ? 'border-gray-900 shadow-sm'
+                                                                        : 'border-gray-200 hover:border-gray-300'
+                                                                }`}
+                                                            >
+                                                                <div className="w-full h-14 mb-1.5 rounded-lg flex items-center justify-center overflow-hidden bg-gray-50">
+                                                                    {(option.file || option.image) ? (
+                                                                        <img 
+                                                                            src={option.file ? URL.createObjectURL(option.file) : option.image} 
+                                                                            alt={option.name} 
+                                                                            className="h-full w-full object-contain p-1" 
+                                                                        />
+                                                                    ) : (
+                                                                        <span className="text-[10px] text-gray-400">No Image</span>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-xs font-medium text-gray-700">{option.name || "Unnamed"}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Review Step */}
+                                    {isOnReviewStep && (
+                                        <div className="p-6">
+                                            <div className="text-center mb-5">
+                                                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-green-100 flex items-center justify-center">
+                                                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                </div>
+                                                <h2 className="text-xl font-bold text-gray-900">Review Your Order</h2>
+                                                <p className="text-sm text-gray-500 mt-1">Please verify all details before adding to cart</p>
+                                            </div>
+
+                                            {/* Measurements Table */}
+                                            {enabledFields.length > 0 && (
+                                                <div className="mb-5">
+                                                    <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                                        </svg>
+                                                        Measurements
+                                                    </h3>
+                                                    <div className="bg-gray-50 rounded-xl overflow-hidden">
+                                                        <table className="w-full text-sm">
+                                                            <thead>
+                                                                <tr className="bg-gray-100">
+                                                                    <th className="text-left py-2.5 px-4 font-semibold text-gray-700">Measurement</th>
+                                                                    <th className="text-right py-2.5 px-4 font-semibold text-gray-700">Value</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {enabledFields.map((field, index) => (
+                                                                    <tr key={field.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                                                        <td className="py-2.5 px-4 text-gray-700">
+                                                                            {field.name}
+                                                                            {field.required && <span className="text-red-500 ml-0.5">*</span>}
+                                                                        </td>
+                                                                        <td className="py-2.5 px-4 text-right">
+                                                                            {previewMeasurementValues[field.id] ? (
+                                                                                <span className="font-medium text-gray-900">{previewMeasurementValues[field.id]} {field.unit}</span>
+                                                                            ) : (
+                                                                                <span className="text-gray-400 italic">Not entered</span>
+                                                                            )}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Additional Options Summary */}
+                                            {hasAdvancedOptions && (
+                                                <div>
+                                                    <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                                                        </svg>
+                                                        Additional Options
+                                                    </h3>
+                                                    <div className="bg-gray-50 rounded-xl overflow-hidden">
+                                                        <table className="w-full text-sm">
+                                                            <tbody>
+                                                                {enableFitPreference && (
+                                                                    <tr className="bg-white border-b border-gray-100">
+                                                                        <td className="py-2.5 px-4 text-gray-700">Fit Preference</td>
+                                                                        <td className="py-2.5 px-4 text-right">
+                                                                            {previewSelectedFit !== null ? (
+                                                                                <span className="font-medium text-gray-900">
+                                                                                    {fitPreferences.find(f => f.id === previewSelectedFit)?.label || '-'}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-gray-400 italic">Not selected</span>
+                                                                            )}
+                                                                        </td>
+                                                                    </tr>
+                                                                )}
+                                                                {enableStitchingNotes && (
+                                                                    <tr className="bg-gray-50 border-b border-gray-100">
+                                                                        <td className="py-2.5 px-4 text-gray-700">Stitching Notes</td>
+                                                                        <td className="py-2.5 px-4 text-right">
+                                                                            {previewStitchingNotes ? (
+                                                                                <span className="font-medium text-gray-900 max-w-[150px] truncate inline-block">{previewStitchingNotes}</span>
+                                                                            ) : (
+                                                                                <span className="text-gray-400 italic">None</span>
+                                                                            )}
+                                                                        </td>
+                                                                    </tr>
+                                                                )}
+                                                                {enableCollarOption && (
+                                                                    <tr className="bg-white border-b border-gray-100">
+                                                                        <td className="py-2.5 px-4 text-gray-700">Collar Style</td>
+                                                                        <td className="py-2.5 px-4 text-right">
+                                                                            {previewSelectedCollar !== null ? (
+                                                                                <span className="font-medium text-gray-900">
+                                                                                    {collarOptions.find(c => c.id === previewSelectedCollar)?.name || '-'}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-gray-400 italic">Not selected</span>
+                                                                            )}
+                                                                        </td>
+                                                                    </tr>
+                                                                )}
+                                                                {customAdvancedFeatures.filter(f => f.enabled && f.options?.length > 0).map((feature, index) => (
+                                                                    <tr key={feature.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                                                        <td className="py-2.5 px-4 text-gray-700">{feature.name}</td>
+                                                                        <td className="py-2.5 px-4 text-right">
+                                                                            {previewSelectedCustomOptions[feature.id] ? (
+                                                                                <span className="font-medium text-gray-900">
+                                                                                    {feature.options.find(o => o.id === previewSelectedCustomOptions[feature.id])?.name || '-'}
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span className="text-gray-400 italic">Not selected</span>
+                                                                            )}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Edit buttons */}
+                                            <div className="mt-5 flex gap-2">
+                                                <button
+                                                    onClick={() => setPreviewCurrentStep(0)}
+                                                    className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                                                >
+                                                    Edit Measurements
+                                                </button>
+                                                {hasAdvancedOptions && (
+                                                    <button
+                                                        onClick={() => setPreviewCurrentStep(totalMeasurementSteps)}
+                                                        className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                                                    >
+                                                        Edit Options
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
-                                    ))}
-                                </>
-                            )}
+                                    )}
 
-                            {/* How to Measure Tab Content */}
-                            {previewActiveTab === "howto" && (
-                                <div className="space-y-4">
-                                    {measurementFields.filter(f => f.enabled).map((field) => (
-                                        <div
-                                            key={field.id}
-                                            className="bg-white border border-gray-200 rounded-lg p-4 relative"
-                                        >
-                                            {/* Info button */}
-                                            <button
-                                                onClick={() => setInfoModalField(field)}
-                                                className="absolute top-4 right-4 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-blue-500 border border-gray-200 rounded-full cursor-pointer transition-colors"
-                                                title="View detailed instructions"
-                                            >
-                                                <span className="text-xs font-medium">i</span>
-                                            </button>
-
-                                            {/* Field name */}
-                                            <h4 className="text-base font-medium text-gray-900 mb-2 pr-8">
-                                                {field.name} {field.required && <span className="text-red-500">*</span>}
-                                            </h4>
-
-                                            {/* Instruction */}
-                                            <p className="text-sm text-gray-600 mb-3 leading-relaxed">
-                                                {field.instruction || "No instructions provided."}
-                                            </p>
-
-                                            {/* Range */}
-                                            <div className="pt-3 border-t border-gray-100">
-                                                <p className="text-sm text-gray-500">
-                                                    Range: {field.range} {field.unit}
-                                                </p>
+                                    {/* No fields enabled message */}
+                                    {totalMeasurementSteps === 0 && !hasAdvancedOptions && (
+                                        <div className="flex flex-col items-center justify-center py-16 px-6">
+                                            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                                                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                                </svg>
                                             </div>
+                                            <p className="text-gray-500 text-center">No measurement fields enabled for this template.</p>
                                         </div>
-                                    ))}
-                                    {measurementFields.filter(f => f.enabled).length === 0 && (
-                                        <p className="text-center text-gray-500 py-8">No measurement fields enabled for this template.</p>
                                     )}
                                 </div>
-                            )}
-                        </div>
 
-                        {/* Footer */}
-                        <div className="p-5 border-t border-gray-200 flex items-center justify-end gap-3">
-                            <button
-                                onClick={() => setShowPreviewModal(false)}
-                                className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => setShowPreviewModal(false)}
-                                className="px-5 py-2 text-sm font-semibold text-white bg-[#1F2937] rounded-lg hover:bg-gray-800 shadow-sm cursor-pointer"
-                            >
-                                Add to Cart
-                            </button>
-                        </div>
-                    </div>
+                                {/* Footer with navigation */}
+                                <div className="border-t border-gray-100 bg-gray-50/50 p-4">
+                                    <div className="flex items-center gap-3">
+                                        {/* Back button */}
+                                        {previewCurrentStep > 0 && !isOnReviewStep && (
+                                            <button
+                                                onClick={() => setPreviewCurrentStep(prev => prev - 1)}
+                                                className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer flex items-center gap-1.5 transition-colors"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                                </svg>
+                                                Back
+                                            </button>
+                                        )}
+                                        
+                                        {/* Next/Review/Add to Cart button */}
+                                        <button
+                                            onClick={() => {
+                                                if (previewCurrentStep < totalSteps - 1) {
+                                                    setPreviewCurrentStep(prev => prev + 1);
+                                                } else {
+                                                    // Last step (Review) - close modal
+                                                    setShowPreviewModal(false);
+                                                    setPreviewCurrentStep(0);
+                                                    setPreviewMeasurementValues({});
+                                                    setPreviewSelectedFit(null);
+                                                    setPreviewSelectedCollar(null);
+                                                    setPreviewSelectedCustomOptions({});
+                                                    setPreviewStitchingNotes("");
+                                                }
+                                            }}
+                                            className={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl cursor-pointer flex items-center justify-center gap-2 transition-colors ${
+                                                isOnReviewStep 
+                                                    ? 'text-white bg-green-600 hover:bg-green-700' 
+                                                    : 'text-white bg-gray-900 hover:bg-gray-800'
+                                            }`}
+                                        >
+                                            {isOnReviewStep ? (
+                                                <>
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                                                    </svg>
+                                                    Confirm & Add to Cart
+                                                </>
+                                            ) : previewCurrentStep === totalMeasurementSteps + advancedOptionsStep - 1 ? (
+                                                <>
+                                                    Review Order
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                    </svg>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    Save & Continue
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                    </svg>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
 
