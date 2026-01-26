@@ -294,6 +294,60 @@ export const action = async ({ request }) => {
 
   if (intent === "delete") {
     const id = formData.get("id");
+    
+    // Get template data before deletion to extract image URLs
+    const template = await prisma.template.findUnique({ where: { id } });
+    
+    if (template && template.guideImage) {
+      // Check if guideImage is a user-uploaded image (in images/uploads/ folder)
+      // Default images are in: images/guideimages/, images/icons/, etc.
+      const isUserUploaded = template.guideImage.includes('/images/uploads/') || template.guideImage.includes('images/uploads/');
+      
+      // Delete user-uploaded image from S3
+      if (isUserUploaded) {
+        const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+        const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+        const region = process.env.AWS_REGION;
+        const bucketName = process.env.AWS_S3_BUCKET_NAME;
+        
+        if (accessKeyId && secretAccessKey && region && bucketName) {
+          const s3Client = new S3Client({
+            region,
+            credentials: {
+              accessKeyId,
+              secretAccessKey,
+            },
+          });
+          
+          try {
+            // Extract S3 key from URL
+            // URL format: https://bucket.s3.region.amazonaws.com/images/uploads/filename
+            const urlObj = new URL(template.guideImage);
+            let key = urlObj.pathname;
+            // Remove leading slash if present
+            if (key.startsWith('/')) {
+              key = key.substring(1);
+            }
+            
+            // Only delete if it's in the uploads folder
+            if (key.includes('images/uploads/')) {
+              const deleteCommand = new DeleteObjectCommand({
+                Bucket: bucketName,
+                Key: key,
+              });
+              
+              await s3Client.send(deleteCommand);
+              console.log(`Deleted user-uploaded guide image: ${key}`);
+            }
+          } catch (error) {
+            // Log error but continue with template deletion
+            console.error(`Error deleting guide image ${template.guideImage}:`, error);
+          }
+        } else {
+          console.warn("AWS credentials not configured, skipping image deletion");
+        }
+      }
+    }
 
     await prisma.template.delete({
       where: { id },
@@ -554,7 +608,11 @@ export default function Templates() {
   const [chartRows, setChartRows] = useState([]);
   const [guideImage, setGuideImage] = useState(null);
   const [pendingGuideImage, setPendingGuideImage] = useState(null);
+  const [guideImageError, setGuideImageError] = useState(""); // Error message for guide image file size
   const [measureDescription, setMeasureDescription] = useState("");
+  
+  // Maximum file size: 2MB
+  const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB in bytes
   const [draggedColumnIndex, setDraggedColumnIndex] = useState(null);
   const [editingColumnKey, setEditingColumnKey] = useState(null);
   const [editingColumnName, setEditingColumnName] = useState("");
@@ -839,6 +897,7 @@ export default function Templates() {
 
     setGuideImage(template.guideImage);
     setPendingGuideImage(null);
+    setGuideImageError(""); // Clear guide image error when editing
     setMeasureDescription(template.measureDescription);
 
     // Set initial state for dirty checking
@@ -1219,6 +1278,7 @@ export default function Templates() {
 
     setGuideImage(null);
     setPendingGuideImage(null);
+    setGuideImageError(""); // Clear guide image error
     setMeasureDescription("• Measurement Instructions:\n  Please follow these guidelines to ensure accurate measurements for the best fit.\n\n• Tip:\n  Use a flexible measuring tape for best results.");
   };
 
@@ -2733,6 +2793,17 @@ export default function Templates() {
                                   onChange={(e) => {
                                     const file = e.target.files?.[0];
                                     if (file) {
+                                      // Validate file size
+                                      if (file.size > MAX_FILE_SIZE) {
+                                        const errorMessage = `Image size must be less than 2MB. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`;
+                                        setGuideImageError(errorMessage);
+                                        setPendingGuideImage(null);
+                                        // Reset file input
+                                        e.target.value = "";
+                                        return;
+                                      }
+                                      // File is valid, clear any previous error
+                                      setGuideImageError("");
                                       setPendingGuideImage(file);
                                     }
                                   }}
@@ -2748,6 +2819,14 @@ export default function Templates() {
                             <a href="#" className="text-sm text-blue-600 hover:text-blue-700 underline">
                               Upload an image to show measurement instructions to customers
                             </a>
+                            {guideImageError && (
+                              <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                {guideImageError}
+                              </p>
+                            )}
                           </div>
 
 
