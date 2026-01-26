@@ -636,6 +636,14 @@ export default function Templates() {
   const [deleteCustomTemplateConfirm, setDeleteCustomTemplateConfirm] = useState(null);
   const [customTemplateViewTab, setCustomTemplateViewTab] = useState("details"); // "details" or "howto"
   const [customTemplateInfoField, setCustomTemplateInfoField] = useState(null); // Field for info modal in custom template view
+  
+  // Preview modal state for step-by-step view
+  const [previewCurrentStep, setPreviewCurrentStep] = useState(0); // Current step in measurement flow
+  const [previewMeasurementValues, setPreviewMeasurementValues] = useState({}); // Store measurement values { fieldId: value }
+  const [previewSelectedFit, setPreviewSelectedFit] = useState(null); // Selected fit preference in preview modal
+  const [previewSelectedCollar, setPreviewSelectedCollar] = useState(null); // Selected collar in preview modal
+  const [previewSelectedCustomOptions, setPreviewSelectedCustomOptions] = useState({}); // Selected custom options { featureId: optionId }
+  const [previewStitchingNotes, setPreviewStitchingNotes] = useState(""); // Stitching notes in preview modal
 
   // Edit Custom Template modal state
   const [editCustomTemplateModal, setEditCustomTemplateModal] = useState(null); // Template being edited
@@ -2010,7 +2018,15 @@ export default function Templates() {
                       <div className="flex items-center gap-4 justify-end">
                         <button
                           type="button"
-                          onClick={() => setViewCustomTemplateModal(template)}
+                          onClick={() => {
+                            setViewCustomTemplateModal(template);
+                            setPreviewCurrentStep(0);
+                            setPreviewMeasurementValues({});
+                            setPreviewSelectedFit(null);
+                            setPreviewSelectedCollar(null);
+                            setPreviewSelectedCustomOptions({});
+                            setPreviewStitchingNotes("");
+                          }}
                           className="flex cursor-pointer items-center gap-1.5 text-sm font-medium text-blue-600 bg-blue-100 px-3 py-2 rounded-md border border-blue-200 hover:text-blue-700 hover:bg-blue-200 transition-all duration-200"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -3220,201 +3236,666 @@ export default function Templates() {
       {/* View Custom Template Modal - Customer Preview Style */}
       {viewCustomTemplateModal && (
         <div
-          className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center"
+          className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setViewCustomTemplateModal(null);
-              setCustomTemplateViewTab("details");
+              setPreviewCurrentStep(0);
+              setPreviewMeasurementValues({});
+              setPreviewSelectedFit(null);
+              setPreviewSelectedCollar(null);
+              setPreviewSelectedCustomOptions({});
+              setPreviewStitchingNotes("");
             }
           }}
         >
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <svg className="w-6 h-6 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">{viewCustomTemplateModal.name}</h2>
-                  <p className="text-xs text-gray-500">{viewCustomTemplateModal.gender} • {viewCustomTemplateModal.clothingType}</p>
+          {(() => {
+            const enabledFields = viewCustomTemplateModal.fields?.filter(f => f.enabled !== false) || [];
+            const totalMeasurementSteps = enabledFields.length;
+            
+            // Calculate total steps: measurements + advanced options (if any) + review step
+            const hasFitPreference = viewCustomTemplateModal.fitPreferences && viewCustomTemplateModal.fitPreferences.length > 0;
+            const hasStitchingNotes = viewCustomTemplateModal.enableStitchingNotes;
+            const hasCollarOption = viewCustomTemplateModal.collarOptions && viewCustomTemplateModal.collarOptions.length > 0;
+            const hasCustomFeatures = viewCustomTemplateModal.customFeatures && viewCustomTemplateModal.customFeatures.filter(f => f.enabled && f.options?.length > 0).length > 0;
+            const hasAdvancedOptions = hasFitPreference || hasStitchingNotes || hasCollarOption || hasCustomFeatures;
+            const advancedOptionsStep = hasAdvancedOptions ? 1 : 0;
+            const reviewStep = 1; // Always have a review step
+            const totalSteps = totalMeasurementSteps + advancedOptionsStep + reviewStep;
+            
+            const currentField = enabledFields[previewCurrentStep];
+            const isOnMeasurementStep = previewCurrentStep < totalMeasurementSteps;
+            const isOnAdvancedStep = previewCurrentStep === totalMeasurementSteps && hasAdvancedOptions;
+            const isOnReviewStep = previewCurrentStep === totalMeasurementSteps + advancedOptionsStep;
+            
+            return (
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] min-h-[90vh] flex flex-col overflow-hidden">
+                {/* Header */}
+                <div className="px-5 pt-4 pb-3 border-b border-gray-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-gray-900 font-semibold text-base">Custom Measurements</h2>
+                    <button 
+                      onClick={() => {
+                        setViewCustomTemplateModal(null);
+                        setPreviewCurrentStep(0);
+                        setPreviewMeasurementValues({});
+                        setPreviewSelectedFit(null);
+                        setPreviewSelectedCollar(null);
+                        setPreviewSelectedCustomOptions({});
+                        setPreviewStitchingNotes("");
+                      }} 
+                      className="p-1.5 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                    >
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  {/* Step Progress - Clean dots with line */}
+                  {totalMeasurementSteps > 0 && (
+                    <div className="relative">
+                      {/* Progress line background */}
+                      <div className="absolute top-3 left-0 right-0 h-0.5 bg-gray-200 rounded-full" />
+                      {/* Progress line filled */}
+                      <div 
+                        className="absolute top-3 left-0 h-0.5 bg-green-500 rounded-full transition-all duration-300"
+                        style={{ 
+                          width: `${(previewCurrentStep / (totalSteps - 1)) * 100}%` 
+                        }}
+                      />
+                      
+                      {/* Step dots */}
+                      <div className="relative flex justify-between">
+                        {enabledFields.map((field, index) => {
+                          const fieldKey = field.id || field.name || `field-${index}`;
+                          const hasValue = previewMeasurementValues[fieldKey] && previewMeasurementValues[fieldKey].trim() !== '';
+                          const isCurrent = index === previewCurrentStep;
+                          
+                          return (
+                            <button
+                              key={fieldKey}
+                              onClick={() => setPreviewCurrentStep(index)}
+                              className="flex flex-col items-center cursor-pointer group"
+                              title={field.name}
+                            >
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                                isCurrent 
+                                  ? hasValue 
+                                      ? 'bg-green-500 text-white ring-4 ring-green-500/20'
+                                      : 'bg-gray-900 text-white ring-4 ring-gray-900/20' 
+                                  : hasValue
+                                      ? 'bg-green-500 text-white'
+                                      : 'bg-white border-2 border-gray-300 text-gray-400 group-hover:border-gray-400'
+                              }`}>
+                                {hasValue ? (
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                ) : (
+                                  <span className="text-[10px] font-bold">{index + 1}</span>
+                                )}
+                              </div>
+                              <span className={`mt-1.5 text-[10px] font-medium max-w-[50px] truncate ${
+                                isCurrent ? 'text-gray-900' : hasValue ? 'text-green-600' : 'text-gray-500'
+                              }`}>
+                                {field.name}
+                              </span>
+                            </button>
+                          );
+                        })}
+                        
+                        {/* Options step */}
+                        {hasAdvancedOptions && (() => {
+                          // Check if user has selected any options
+                          const hasSelectedOptions = 
+                            (hasFitPreference && previewSelectedFit !== null) ||
+                            (hasStitchingNotes && previewStitchingNotes.trim() !== '') ||
+                            (hasCollarOption && previewSelectedCollar !== null) ||
+                            Object.keys(previewSelectedCustomOptions).length > 0;
+                          
+                          return (
+                            <button
+                              onClick={() => setPreviewCurrentStep(totalMeasurementSteps)}
+                              className="flex flex-col items-center cursor-pointer group"
+                              title="Options"
+                            >
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                                isOnAdvancedStep 
+                                  ? hasSelectedOptions
+                                      ? 'bg-green-500 text-white ring-4 ring-green-500/20'
+                                      : 'bg-gray-900 text-white ring-4 ring-gray-900/20' 
+                                  : hasSelectedOptions
+                                      ? 'bg-green-500 text-white'
+                                      : 'bg-white border-2 border-gray-300 text-gray-400 group-hover:border-gray-400'
+                              }`}>
+                                {hasSelectedOptions ? (
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                ) : (
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                                  </svg>
+                                )}
+                              </div>
+                              <span className={`mt-1.5 text-[10px] font-medium ${
+                                isOnAdvancedStep ? 'text-gray-900' : hasSelectedOptions ? 'text-green-600' : 'text-gray-500'
+                              }`}>
+                                Options
+                              </span>
+                            </button>
+                          );
+                        })()}
+                        
+                        {/* Review step */}
+                        <button
+                          onClick={() => setPreviewCurrentStep(totalMeasurementSteps + advancedOptionsStep)}
+                          className="flex flex-col items-center cursor-pointer group"
+                          title="Review"
+                        >
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                            isOnReviewStep 
+                              ? 'bg-gray-900 text-white ring-4 ring-gray-900/20' 
+                              : 'bg-white border-2 border-gray-300 text-gray-400 group-hover:border-gray-400'
+                          }`}>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                          <span className={`mt-1.5 text-[10px] font-medium ${
+                            isOnReviewStep ? 'text-gray-900' : 'text-gray-500'
+                          }`}>
+                            Review
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-auto">
+                  {/* Measurement Step */}
+                  {isOnMeasurementStep && currentField && (
+                    <div className="p-6">
+                      {/* Title */}
+                      <div className="text-center mb-4 flex items-center justify-between">
+                        <h2 className="text-xl font-bold text-gray-900">
+                          {currentField.name}
+                          {currentField.required && <span className="text-red-500 ml-1">*</span>}
+                        </h2>
+                        <p className="text-xs text-gray-400 uppercase tracking-wider">Step {previewCurrentStep + 1} of {totalSteps}</p>
+                      </div>
+
+                      {/* Guide Image */}
+                      <div className="w-full h-52 mb-5 flex items-center justify-center bg-gradient-to-b from-gray-50 to-white rounded-xl border border-gray-100">
+                        {(currentField.file || currentField.image) ? (
+                          <img 
+                            src={currentField.file ? URL.createObjectURL(currentField.file) : currentField.image} 
+                            alt={`How to measure ${currentField.name}`}
+                            className="max-w-full max-h-full object-contain p-4"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center gap-2 text-gray-300">
+                            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-sm">No guide image</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Measurement Instructions Card */}
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-5">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-semibold text-blue-900 mb-1">How to Measure</h3>
+                            <p className="text-sm text-blue-800 leading-relaxed">
+                              {currentField.instruction || "Follow the guide image to take this measurement."}
+                            </p>
+                            {currentField.range && (
+                              <p className="text-xs text-blue-600 mt-2 font-medium">
+                                Expected range: {currentField.range} {currentField.unit}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Input Field */}
+                      <div className="space-y-3">
+                        <label className="text-sm font-medium text-gray-700">Enter your measurement ({currentField.unit})</label>
+                        <div className="flex items-center gap-3 mt-2">
+                          <div className="flex-1 relative">
+                            <input
+                              type="text"
+                              value={previewMeasurementValues[currentField.id || currentField.name || `field-${previewCurrentStep}`] || ""}
+                              onChange={(e) => {
+                                const fieldKey = currentField.id || currentField.name || `field-${previewCurrentStep}`;
+                                setPreviewMeasurementValues(prev => ({
+                                  ...prev,
+                                  [fieldKey]: e.target.value
+                                }));
+                              }}
+                              placeholder="Enter value"
+                              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent placeholder-gray-400 transition-all"
+                            />
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">{currentField.unit}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Advanced Options Step */}
+                  {isOnAdvancedStep && (
+                    <div className="p-6 space-y-5">
+                      <div className="text-center mb-2">
+                        <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Final Step</p>
+                        <h2 className="text-xl font-bold text-gray-900">Additional Options</h2>
+                        <p className="text-sm text-gray-500 mt-1">Customize your order preferences</p>
+                      </div>
+
+                      {/* Fit Preference */}
+                      {hasFitPreference && (
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-semibold text-gray-900">Fit Preference</h3>
+                            {previewSelectedFit !== null && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewSelectedFit(null)}
+                                className="text-xs text-red-600 hover:text-red-700 font-medium cursor-pointer"
+                              >
+                                Clear
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {viewCustomTemplateModal.fitPreferences.filter(f => f.enabled).map((fit) => {
+                              const fitKey = fit.id || fit.label;
+                              return (
+                              <label key={fitKey} className="cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="fit_preference"
+                                  className="peer sr-only"
+                                  checked={previewSelectedFit === fitKey}
+                                  onChange={() => setPreviewSelectedFit(fitKey)}
+                                />
+                                <div className="text-center py-2.5 px-1 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 peer-checked:bg-gray-900 peer-checked:text-white peer-checked:border-gray-900 transition-all hover:border-gray-300 peer-checked:hover:bg-gray-800 flex flex-col items-center justify-center min-h-[56px]">
+                                  <span className="font-medium text-xs">{fit.label}</span>
+                                  <span className="text-[10px] opacity-70">({fit.allowance})</span>
+                                </div>
+                              </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Stitching Notes */}
+                      {hasStitchingNotes && (
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-2">Stitching Notes</h3>
+                          <textarea
+                            value={previewStitchingNotes}
+                            onChange={(e) => setPreviewStitchingNotes(e.target.value)}
+                            placeholder="Add any specific instructions for the tailor..."
+                            rows={2}
+                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent placeholder-gray-400 resize-none"
+                          />
+                        </div>
+                      )}
+
+                      {/* Collar Option */}
+                      {hasCollarOption && (
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-semibold text-gray-900">Collar Style</h3>
+                            {previewSelectedCollar !== null && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewSelectedCollar(null)}
+                                className="text-xs text-red-600 hover:text-red-700 font-medium cursor-pointer"
+                              >
+                                Clear
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {viewCustomTemplateModal.collarOptions.filter(c => c.enabled).map((collar) => {
+                              const collarKey = collar.id || collar.name;
+                              return (
+                                <div
+                                  key={collarKey}
+                                  onClick={() => {
+                                    if (previewSelectedCollar === collarKey) {
+                                      setPreviewSelectedCollar(null);
+                                    } else {
+                                      setPreviewSelectedCollar(collarKey);
+                                    }
+                                  }}
+                                  className={`cursor-pointer bg-white border-2 rounded-xl p-2 text-center transition-all ${previewSelectedCollar === collarKey
+                                    ? 'border-gray-900 shadow-sm'
+                                    : 'border-gray-200 hover:border-gray-300'
+                                  }`}
+                                >
+                                  <div className="w-full h-14 mb-1.5 rounded-lg flex items-center justify-center overflow-hidden bg-gray-50">
+                                    {collar.image ? (
+                                      <img src={collar.image} alt={collar.name} className="h-full w-full object-contain p-1" />
+                                    ) : (
+                                      <span className="text-[10px] text-gray-400">No Image</span>
+                                    )}
+                                  </div>
+                                  <span className="text-xs font-medium text-gray-700">{collar.name}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Custom Advanced Features */}
+                      {hasCustomFeatures && viewCustomTemplateModal.customFeatures.filter(f => f.enabled && f.options?.length > 0).map((feature) => (
+                        <div key={feature.id} className="bg-gray-50 rounded-xl p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-semibold text-gray-900">
+                              {feature.name}
+                              {feature.required && <span className="text-red-500 ml-1">*</span>}
+                            </h3>
+                            {previewSelectedCustomOptions[feature.id] && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewSelectedCustomOptions(prev => {
+                                  const newState = { ...prev };
+                                  delete newState[feature.id];
+                                  return newState;
+                                })}
+                                className="text-xs text-red-600 hover:text-red-700 font-medium cursor-pointer"
+                              >
+                                Clear
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {feature.options.map((option) => (
+                              <div
+                                key={option.id}
+                                onClick={() => {
+                                  if (previewSelectedCustomOptions[feature.id] === option.id) {
+                                    setPreviewSelectedCustomOptions(prev => {
+                                      const newState = { ...prev };
+                                      delete newState[feature.id];
+                                      return newState;
+                                    });
+                                  } else {
+                                    setPreviewSelectedCustomOptions(prev => ({
+                                      ...prev,
+                                      [feature.id]: option.id
+                                    }));
+                                  }
+                                }}
+                                className={`cursor-pointer bg-white border-2 rounded-xl p-2 text-center transition-all ${
+                                  previewSelectedCustomOptions[feature.id] === option.id
+                                    ? 'border-gray-900 shadow-sm'
+                                    : 'border-gray-200 hover:border-gray-300'
+                                }`}
+                              >
+                                <div className="w-full h-14 mb-1.5 rounded-lg flex items-center justify-center overflow-hidden bg-gray-50">
+                                  {(option.file || option.image) ? (
+                                    <img 
+                                      src={option.file ? URL.createObjectURL(option.file) : option.image} 
+                                      alt={option.name} 
+                                      className="h-full w-full object-contain p-1" 
+                                    />
+                                  ) : (
+                                    <span className="text-[10px] text-gray-400">No Image</span>
+                                  )}
+                                </div>
+                                <span className="text-xs font-medium text-gray-700">{option.name || "Unnamed"}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Review Step */}
+                  {isOnReviewStep && (
+                    <div className="p-6">
+                      <div className="text-center mb-5">
+                        <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-green-100 flex items-center justify-center">
+                          <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <h2 className="text-xl font-bold text-gray-900">Review Your Order</h2>
+                        <p className="text-sm text-gray-500 mt-1">Please verify all details before adding to cart</p>
+                      </div>
+
+                      {/* Measurements Table */}
+                      {enabledFields.length > 0 && (
+                        <div className="mb-5">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                            </svg>
+                            Measurements
+                          </h3>
+                          <div className="bg-gray-50 rounded-xl overflow-hidden">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="bg-gray-100">
+                                  <th className="text-left py-2.5 px-4 font-semibold text-gray-700">Measurement</th>
+                                  <th className="text-right py-2.5 px-4 font-semibold text-gray-700">Value</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {enabledFields.map((field, index) => {
+                                  const fieldKey = field.id || field.name || `field-${index}`;
+                                  return (
+                                    <tr key={fieldKey} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                      <td className="py-2.5 px-4 text-gray-700">
+                                        {field.name}
+                                        {field.required && <span className="text-red-500 ml-0.5">*</span>}
+                                      </td>
+                                      <td className="py-2.5 px-4 text-right">
+                                        {previewMeasurementValues[fieldKey] && previewMeasurementValues[fieldKey].trim() !== '' ? (
+                                          <span className="font-medium text-gray-900">{previewMeasurementValues[fieldKey]} {field.unit}</span>
+                                        ) : (
+                                          <button
+                                            onClick={() => setPreviewCurrentStep(index)}
+                                            className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                                          >
+                                            + Add value
+                                          </button>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Additional Options Summary */}
+                      {hasAdvancedOptions && (
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                            </svg>
+                            Additional Options
+                          </h3>
+                          <div className="bg-gray-50 rounded-xl overflow-hidden">
+                            <table className="w-full text-sm">
+                              <tbody>
+                                {hasFitPreference && (
+                                  <tr className="bg-white border-b border-gray-100">
+                                    <td className="py-2.5 px-4 text-gray-700">Fit Preference</td>
+                                    <td className="py-2.5 px-4 text-right">
+                                      {previewSelectedFit !== null ? (
+                                        <span className="font-medium text-gray-900">
+                                          {viewCustomTemplateModal.fitPreferences.find(f => (f.id || f.label) === previewSelectedFit)?.label || '-'}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-400 italic">Not selected</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )}
+                                {hasStitchingNotes && (
+                                  <tr className="bg-gray-50 border-b border-gray-100">
+                                    <td className="py-2.5 px-4 text-gray-700">Stitching Notes</td>
+                                    <td className="py-2.5 px-4 text-right">
+                                      {previewStitchingNotes ? (
+                                        <span className="font-medium text-gray-900 max-w-[150px] truncate inline-block">{previewStitchingNotes}</span>
+                                      ) : (
+                                        <span className="text-gray-400 italic">None</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )}
+                                {hasCollarOption && (
+                                  <tr className="bg-white border-b border-gray-100">
+                                    <td className="py-2.5 px-4 text-gray-700">Collar Style</td>
+                                    <td className="py-2.5 px-4 text-right">
+                                      {previewSelectedCollar !== null ? (
+                                        <span className="font-medium text-gray-900">
+                                          {viewCustomTemplateModal.collarOptions.find(c => (c.id || c.name) === previewSelectedCollar)?.name || '-'}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-400 italic">Not selected</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                )}
+                                {hasCustomFeatures && viewCustomTemplateModal.customFeatures.filter(f => f.enabled && f.options?.length > 0).map((feature, index) => (
+                                  <tr key={feature.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                    <td className="py-2.5 px-4 text-gray-700">
+                                      {feature.name}
+                                      {feature.required && <span className="text-red-500 ml-0.5">*</span>}
+                                    </td>
+                                    <td className="py-2.5 px-4 text-right">
+                                      {previewSelectedCustomOptions[feature.id] ? (
+                                        <span className="font-medium text-gray-900">
+                                          {feature.options.find(o => o.id === previewSelectedCustomOptions[feature.id])?.name || '-'}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-400 italic">Not selected</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Edit Options button */}
+                      {hasAdvancedOptions && (
+                        <div className="mt-5">
+                          <button
+                            onClick={() => setPreviewCurrentStep(totalMeasurementSteps)}
+                            className="w-full px-3 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                          >
+                            Edit Options
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* No fields enabled message */}
+                  {totalMeasurementSteps === 0 && !hasAdvancedOptions && (
+                    <div className="flex flex-col items-center justify-center py-16 px-6">
+                      <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                      </div>
+                      <p className="text-gray-500 text-center">No measurement fields enabled for this template.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer with navigation */}
+                <div className="border-t border-gray-100 bg-gray-50/50 p-4">
+                  <div className="flex items-center gap-3">
+                    {/* Back button */}
+                    {previewCurrentStep > 0 && !isOnReviewStep && (
+                      <button
+                        onClick={() => setPreviewCurrentStep(prev => prev - 1)}
+                        className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer flex items-center gap-1.5 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                        Back
+                      </button>
+                    )}
+                    
+                    {/* Next/Review/Add to Cart button */}
+                    <button
+                      onClick={() => {
+                        if (previewCurrentStep < totalSteps - 1) {
+                          setPreviewCurrentStep(prev => prev + 1);
+                        } else {
+                          // Last step (Review) - close modal
+                          setViewCustomTemplateModal(null);
+                          setPreviewCurrentStep(0);
+                          setPreviewMeasurementValues({});
+                          setPreviewSelectedFit(null);
+                          setPreviewSelectedCollar(null);
+                          setPreviewSelectedCustomOptions({});
+                          setPreviewStitchingNotes("");
+                        }
+                      }}
+                      className={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl cursor-pointer flex items-center justify-center gap-2 transition-colors ${
+                        isOnReviewStep 
+                          ? 'text-white bg-green-600 hover:bg-green-700' 
+                          : 'text-white bg-gray-900 hover:bg-gray-800'
+                      }`}
+                    >
+                      {isOnReviewStep ? (
+                        <>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          Confirm & Add to Cart
+                        </>
+                      ) : previewCurrentStep === totalMeasurementSteps + advancedOptionsStep - 1 ? (
+                        <>
+                          Review Order
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </>
+                      ) : (
+                        <>
+                          Save & Continue
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
-              <button
-                onClick={() => { setViewCustomTemplateModal(null); setCustomTemplateViewTab("details"); }}
-                className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer"
-              >
-                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex border-b border-gray-200 px-5">
-              <button
-                onClick={() => setCustomTemplateViewTab("details")}
-                className={`py-3 px-1 text-sm font-medium mr-6 cursor-pointer border-b-2 transition-colors ${customTemplateViewTab === "details"
-                  ? "text-gray-900 border-gray-900"
-                  : "text-gray-500 border-transparent hover:text-gray-700"
-                  }`}
-              >
-                Details
-              </button>
-              <button
-                onClick={() => setCustomTemplateViewTab("howto")}
-                className={`py-3 px-1 text-sm font-medium cursor-pointer border-b-2 transition-colors ${customTemplateViewTab === "howto"
-                  ? "text-gray-900 border-gray-900"
-                  : "text-gray-500 border-transparent hover:text-gray-700"
-                  }`}
-              >
-                How to Measure
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 overflow-auto p-6 space-y-4">
-              {/* Details Tab Content */}
-              {customTemplateViewTab === "details" && (
-                <>
-                  {/* Measurement Fields */}
-                  {viewCustomTemplateModal.fields?.filter(f => f.enabled !== false).map((field, idx) => (
-                    <div key={idx} className="flex items-center gap-4">
-                      {/* Info Icon */}
-                      <div className="flex items-center gap-2 min-w-[130px]">
-                        <button
-                          onClick={() => setCustomTemplateInfoField(field)}
-                          className="text-gray-400 hover:text-blue-500 transition-colors cursor-pointer"
-                          title="View Instructions"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </button>
-                        {/* Label */}
-                        <label className="text-sm font-medium text-gray-700">
-                          {field.name} {field.required && <span className="text-red-500">*</span>}
-                        </label>
-                      </div>
-                      {/* Input */}
-                      <input
-                        type="text"
-                        placeholder={`Enter ${field.name.toLowerCase()}`}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400"
-                        readOnly
-                      />
-                    </div>
-                  ))}
-                  {(!viewCustomTemplateModal.fields || viewCustomTemplateModal.fields.length === 0) && (
-                    <p className="text-center text-gray-500 py-8">No measurement fields in this template.</p>
-                  )}
-
-                  {/* Fit Preferences */}
-                  {viewCustomTemplateModal.fitPreferences && viewCustomTemplateModal.fitPreferences.length > 0 && (
-                    <div className="border-t border-gray-100 pt-6">
-                      <h3 className="text-sm font-medium text-gray-900 mb-3">Fit Preference</h3>
-                      <div className="grid grid-cols-3 gap-3">
-                        {viewCustomTemplateModal.fitPreferences.filter(f => f.enabled !== false).map((fit, idx) => (
-                          <div key={idx} className="text-center py-2 px-1 border border-gray-200 rounded-md text-sm text-gray-600 flex flex-col items-center justify-center min-h-[60px]">
-                            <span className="font-medium">{fit.label}</span>
-                            <span className="text-[10px] opacity-70">({fit.allowance})</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Stitching Notes */}
-                  {viewCustomTemplateModal.enableStitchingNotes && (
-                    <div className="border-t border-gray-100 pt-6">
-                      <h3 className="text-sm font-medium text-gray-900 mb-3">Stitching Notes</h3>
-                      <textarea
-                        placeholder="Add any specific instructions for stitching..."
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900 placeholder-gray-400 resize-none"
-                        readOnly
-                      />
-                    </div>
-                  )}
-
-                  {/* Collar Options */}
-                  {viewCustomTemplateModal.collarOptions && viewCustomTemplateModal.collarOptions.length > 0 && (
-                    <div className="border-t border-gray-100 pt-6 pb-4">
-                      <h3 className="text-sm font-medium text-gray-900 mb-3">Collar Option</h3>
-                      <div className="grid grid-cols-3 gap-3">
-                        {viewCustomTemplateModal.collarOptions.filter(c => c.enabled !== false).map((collar, idx) => (
-                          <div
-                            key={idx}
-                            className="cursor-pointer border border-gray-200 rounded-lg p-2 text-center transition-all hover:bg-gray-50"
-                          >
-                            <div className="w-full h-24 mb-2 bg-white rounded flex items-center justify-center overflow-hidden border border-gray-100">
-                              {collar.image ? (
-                                <img src={collar.image} alt={collar.name} className="h-full w-full object-contain p-2" />
-                              ) : (
-                                <span className="text-xs text-gray-400">No Image</span>
-                              )}
-                            </div>
-                            <span className="text-sm font-medium">{collar.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* How to Measure Tab Content */}
-              {customTemplateViewTab === "howto" && (
-                <div className="space-y-4">
-                  {viewCustomTemplateModal.fields?.filter(f => f.enabled !== false).map((field, idx) => (
-                    <div
-                      key={idx}
-                      className="bg-white border border-gray-200 rounded-lg p-4 relative"
-                    >
-                      {/* Info button */}
-                      <button
-                        onClick={() => setCustomTemplateInfoField(field)}
-                        className="absolute top-4 right-4 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-blue-500 border border-gray-200 rounded-full cursor-pointer transition-colors"
-                        title="View detailed instructions"
-                      >
-                        <span className="text-xs font-medium">i</span>
-                      </button>
-
-                      {/* Field name */}
-                      <h4 className="text-base font-medium text-gray-900 mb-2 pr-8">
-                        {field.name} {field.required && <span className="text-red-500">*</span>}
-                      </h4>
-
-                      {/* Instruction */}
-                      <p className="text-sm text-gray-600 mb-3 leading-relaxed">
-                        {field.instruction || "No instructions provided."}
-                      </p>
-
-                      {/* Range */}
-                      <div className="pt-3 border-t border-gray-100">
-                        <p className="text-sm text-gray-500">
-                          Range: {field.range} {field.unit}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  {(!viewCustomTemplateModal.fields || viewCustomTemplateModal.fields.length === 0) && (
-                    <p className="text-center text-gray-500 py-8">No measurement fields in this template.</p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="p-5 border-t border-gray-200 flex items-center justify-end gap-3">
-              <button
-                onClick={() => { setViewCustomTemplateModal(null); setCustomTemplateViewTab("details"); }}
-                className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+            );
+          })()}
         </div>
       )}
 
