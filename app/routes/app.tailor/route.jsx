@@ -390,6 +390,7 @@ export default function CustomTailor() {
     const [showMeasurementFields, setShowMeasurementFields] = useState(true);
     const [showAdvancedFeatures, setShowAdvancedFeatures] = useState(true);
     const [visibilityError, setVisibilityError] = useState(false);
+    const [advancedFeaturesError, setAdvancedFeaturesError] = useState(false);
 
     // Edit mode state
     const [isEditMode, setIsEditMode] = useState(false);
@@ -803,6 +804,7 @@ export default function CustomTailor() {
         setCollarErrors({});
         // Don't clear customFeaturesErrors - we'll merge new validation errors with existing ones (preserving file size errors)
         setVisibilityError(false);
+        setAdvancedFeaturesError(false);
 
         let hasValidationError = false;
 
@@ -818,6 +820,12 @@ export default function CustomTailor() {
         const isCustomPreset = selectedPreset.id === "male-custom" || selectedPreset.id === "female-custom";
         if (isCustomPreset && !showMeasurementFields && !showAdvancedFeatures) {
             setVisibilityError(true);
+            hasValidationError = true;
+        }
+
+        // Validate Advanced Features: if "Show Advanced Features" is ON, at least one feature must be enabled
+        if (isCustomPreset && showAdvancedFeatures && !enableFitPreference && !enableStitchingNotes && !enableCollarOption && customAdvancedFeatures.filter(f => f.enabled).length === 0) {
+            setAdvancedFeaturesError(true);
             hasValidationError = true;
         }
 
@@ -1153,7 +1161,7 @@ export default function CustomTailor() {
                 <div className="flex gap-6 items-start">
                     {/* Left: Measurement Fields */}
                     <div className="flex-1">
-                        <div className="bg-white border border-gray-200 rounded-lg">
+                        <div className={`bg-white border border-gray-200 rounded-lg ${!showMeasurementFields && (selectedPreset.id === "male-custom" || selectedPreset.id === "female-custom") ? "opacity-50 pointer-events-none" : ""}`}>
                             {/* Header */}
                             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
                                 <h3 className="text-base font-semibold text-gray-900">Measurement Fields</h3>
@@ -1169,7 +1177,7 @@ export default function CustomTailor() {
                             </div>
 
                             {/* Fields Error Message */}
-                            {fieldsError && (
+                            {fieldsError && (selectedPreset.id !== "male-custom" && selectedPreset.id !== "female-custom" || showMeasurementFields) && (
                                 <div className="mx-5 my-4 p-3 bg-red-50 border border-red-200 rounded-md">
                                     <p className="text-sm text-red-600">Please enable at least one measurement field to create a template.</p>
                                 </div>
@@ -1319,8 +1327,18 @@ export default function CustomTailor() {
                         </div>
 
                         {/* Advanced Features */}
-                        <div className="mt-6 bg-white border border-gray-200 rounded-lg p-5">
+                        <div className={`mt-6 bg-white border border-gray-200 rounded-lg p-5 ${!showAdvancedFeatures && (selectedPreset.id === "male-custom" || selectedPreset.id === "female-custom") ? "opacity-50 pointer-events-none" : ""}`}>
                             <h3 className="text-base font-semibold text-gray-900 mb-4">Advanced Features</h3>
+                            
+                            {/* Warning/Error when Show Advanced Features is ON but all features are disabled */}
+                            {showAdvancedFeatures && (selectedPreset.id === "male-custom" || selectedPreset.id === "female-custom") && 
+                             !enableFitPreference && !enableStitchingNotes && !enableCollarOption && 
+                             customAdvancedFeatures.filter(f => f.enabled).length === 0 && (
+                                <div className={`mb-4 p-3 rounded-md ${advancedFeaturesError ? "bg-red-50 border border-red-200" : "bg-yellow-50 border border-yellow-200"}`}>
+                                    <p className={`text-sm ${advancedFeaturesError ? "text-red-600" : "text-yellow-800"}`}>Please switch on any feature to show in the customer preview.</p>
+                                </div>
+                            )}
+                            
                             <div className="space-y-4">
                                 {/* Fit Preference */}
                                 <div className="flex items-center justify-between">
@@ -1328,7 +1346,10 @@ export default function CustomTailor() {
                                         <div className={`relative w-10 h-5 rounded-full transition-colors ${enableFitPreference ? "bg-blue-600" : "bg-gray-200"}`}>
                                             <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${enableFitPreference ? "translate-x-5" : ""}`} />
                                         </div>
-                                        <input type="checkbox" checked={enableFitPreference} onChange={() => setEnableFitPreference(!enableFitPreference)} className="sr-only" />
+                                        <input type="checkbox" checked={enableFitPreference} onChange={() => {
+                                            setEnableFitPreference(!enableFitPreference);
+                                            setAdvancedFeaturesError(false);
+                                        }} className="sr-only" />
                                         <span className="text-sm text-gray-700">Enable Fit Preference</span>
                                     </label>
                                     {enableFitPreference && (
@@ -1394,7 +1415,10 @@ export default function CustomTailor() {
                                         <div className={`relative w-10 h-5 rounded-full transition-colors ${enableStitchingNotes ? "bg-blue-600" : "bg-gray-200"}`}>
                                             <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${enableStitchingNotes ? "translate-x-5" : ""} `} />
                                         </div>
-                                        <input type="checkbox" checked={enableStitchingNotes} onChange={() => setEnableStitchingNotes(!enableStitchingNotes)} className="sr-only" />
+                                        <input type="checkbox" checked={enableStitchingNotes} onChange={() => {
+                                            setEnableStitchingNotes(!enableStitchingNotes);
+                                            setAdvancedFeaturesError(false);
+                                        }} className="sr-only" />
                                         <span className="text-sm text-gray-700">Enable Stitching Notes</span>
                                     </label>
                                     {enableStitchingNotes && (
@@ -1416,7 +1440,10 @@ export default function CustomTailor() {
                                         <div className={`relative w-10 h-5 rounded-full transition-colors ${enableCollarOption ? "bg-blue-600" : "bg-gray-200"}`}>
                                             <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${enableCollarOption ? "translate-x-5" : ""} `} />
                                         </div>
-                                        <input type="checkbox" checked={enableCollarOption} onChange={() => setEnableCollarOption(!enableCollarOption)} className="sr-only" />
+                                        <input type="checkbox" checked={enableCollarOption} onChange={() => {
+                                            setEnableCollarOption(!enableCollarOption);
+                                            setAdvancedFeaturesError(false);
+                                        }} className="sr-only" />
                                         <span className="text-sm text-gray-700">Enable Collar Option</span>
                                     </label>
                                     {enableCollarOption && (
@@ -1584,6 +1611,9 @@ export default function CustomTailor() {
                                                             checked={feature.enabled} 
                                                             onChange={() => {
                                                                 const newEnabled = !feature.enabled;
+                                                                if (newEnabled) {
+                                                                    setAdvancedFeaturesError(false);
+                                                                }
                                                                 
                                                                 setCustomAdvancedFeatures(prev => prev.map(f => {
                                                                     if (f.id === feature.id) {
