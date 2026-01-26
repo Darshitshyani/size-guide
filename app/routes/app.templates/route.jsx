@@ -3,6 +3,7 @@ import { useLoaderData, useFetcher, useNavigate, useSearchParams } from "react-r
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../../shopify.server";
 import prisma from "../../db.server";
+import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 // Image URLs
 const ICONS_BASE_URL = "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/icons";
@@ -364,6 +365,122 @@ export const action = async ({ request }) => {
 
   if (intent === "deleteCustomTemplate") {
     const id = formData.get("id");
+    
+    // Get template data before deletion to extract image URLs
+    const template = await prisma.tailorTemplate.findUnique({ where: { id } });
+    
+    if (template) {
+      // Extract all image URLs from template data
+      const imageUrls = [];
+      
+      // Extract from fields
+      if (template.fields) {
+        try {
+          const fields = JSON.parse(template.fields);
+          if (Array.isArray(fields)) {
+            fields.forEach(field => {
+              if (field.image && typeof field.image === 'string') {
+                imageUrls.push(field.image);
+              }
+            });
+          }
+        } catch (e) {
+          console.error("Error parsing fields:", e);
+        }
+      }
+      
+      // Extract from collarOptions
+      if (template.collarOptions) {
+        try {
+          const collarOptions = JSON.parse(template.collarOptions);
+          if (Array.isArray(collarOptions)) {
+            collarOptions.forEach(collar => {
+              if (collar.image && typeof collar.image === 'string') {
+                imageUrls.push(collar.image);
+              }
+            });
+          }
+        } catch (e) {
+          console.error("Error parsing collarOptions:", e);
+        }
+      }
+      
+      // Extract from customFeatures
+      if (template.customFeatures) {
+        try {
+          const customFeatures = JSON.parse(template.customFeatures);
+          if (Array.isArray(customFeatures)) {
+            customFeatures.forEach(feature => {
+              if (feature.options && Array.isArray(feature.options)) {
+                feature.options.forEach(option => {
+                  if (option.image && typeof option.image === 'string') {
+                    imageUrls.push(option.image);
+                  }
+                });
+              }
+            });
+          }
+        } catch (e) {
+          console.error("Error parsing customFeatures:", e);
+        }
+      }
+      
+      // Filter user-uploaded images (those in images/uploads/ folder)
+      // Default images are in: images/customguideimages/, images/collars/, images/icons/, images/guideimages/
+      const userUploadedImages = imageUrls.filter(url => {
+        if (!url || typeof url !== 'string') return false;
+        // Check if URL contains the uploads folder path
+        return url.includes('/images/uploads/') || url.includes('images/uploads/');
+      });
+      
+      // Delete user-uploaded images from S3
+      if (userUploadedImages.length > 0) {
+        const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+        const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+        const region = process.env.AWS_REGION;
+        const bucketName = process.env.AWS_S3_BUCKET_NAME;
+        
+        if (accessKeyId && secretAccessKey && region && bucketName) {
+          const s3Client = new S3Client({
+            region,
+            credentials: {
+              accessKeyId,
+              secretAccessKey,
+            },
+          });
+          
+          // Delete each user-uploaded image
+          for (const imageUrl of userUploadedImages) {
+            try {
+              // Extract S3 key from URL
+              // URL format: https://bucket.s3.region.amazonaws.com/images/uploads/filename
+              const urlObj = new URL(imageUrl);
+              let key = urlObj.pathname;
+              // Remove leading slash if present
+              if (key.startsWith('/')) {
+                key = key.substring(1);
+              }
+              
+              // Only delete if it's in the uploads folder
+              if (key.includes('images/uploads/')) {
+                const deleteCommand = new DeleteObjectCommand({
+                  Bucket: bucketName,
+                  Key: key,
+                });
+                
+                await s3Client.send(deleteCommand);
+                console.log(`Deleted user-uploaded image: ${key}`);
+              }
+            } catch (error) {
+              // Log error but continue with other deletions and template deletion
+              console.error(`Error deleting image ${imageUrl}:`, error);
+            }
+          }
+        } else {
+          console.warn("AWS credentials not configured, skipping image deletion");
+        }
+      }
+    }
 
     await prisma.tailorTemplate.delete({
       where: { id },
