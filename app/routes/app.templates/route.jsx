@@ -2461,7 +2461,7 @@ export default function Templates() {
               }
             }}
           >
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] min-h-[90vh] overflow-hidden flex flex-col">
               {/* Modal Header */}
               <div className="flex items-center justify-between p-5 border-b border-gray-200">
                 <h2 className="text-xl font-bold text-gray-900">

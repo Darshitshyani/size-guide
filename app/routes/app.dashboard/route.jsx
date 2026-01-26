@@ -1661,7 +1661,7 @@ export default function Dashboard() {
             }
           }}
         >
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] min-h-[500px] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] min-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200">
               <div>
