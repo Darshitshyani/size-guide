@@ -773,9 +773,38 @@ export default function CustomTailor() {
         }
         formData.append("enableStitchingNotes", enableStitchingNotes.toString());
         
-        // Add custom advanced features
+        // Process custom advanced features option images uploads
+        let finalCustomFeatures = [...customAdvancedFeatures];
         if (customAdvancedFeatures.length > 0) {
-            formData.append("customAdvancedFeatures", JSON.stringify(customAdvancedFeatures));
+            finalCustomFeatures = await Promise.all(customAdvancedFeatures.map(async (feature) => {
+                if (feature.options && feature.options.length > 0) {
+                    const processedOptions = await Promise.all(feature.options.map(async (option) => {
+                        if (option.file) {
+                            try {
+                                const fd = new FormData();
+                                fd.append("file", option.file);
+                                const res = await fetch("/api/upload", { method: "POST", body: fd });
+                                const data = await res.json();
+                                if (data.url) {
+                                    const { file, ...rest } = option;
+                                    return { ...rest, image: data.url };
+                                }
+                            } catch (e) {
+                                console.error("Custom feature option upload failed", e);
+                            }
+                        }
+                        const { file, ...rest } = option;
+                        return rest;
+                    }));
+                    return { ...feature, options: processedOptions };
+                }
+                return feature;
+            }));
+        }
+        
+        // Add custom advanced features
+        if (finalCustomFeatures.length > 0) {
+            formData.append("customAdvancedFeatures", JSON.stringify(finalCustomFeatures));
         }
 
         fetcher.submit(formData, { method: "POST" });

@@ -145,6 +145,7 @@ export const loader = async ({ request }) => {
     fields: typeof template.fields === "string" ? JSON.parse(template.fields) : template.fields,
     fitPreferences: template.fitPreferences ? JSON.parse(template.fitPreferences) : null,
     collarOptions: template.collarOptions ? JSON.parse(template.collarOptions) : null,
+    customFeatures: template.customFeatures ? JSON.parse(template.customFeatures) : null,
     status: template.isActive ? "Active" : "Inactive",
     isActive: template.isActive,
     enableStitchingNotes: template.enableStitchingNotes,
@@ -377,6 +378,7 @@ export const action = async ({ request }) => {
     const fields = formData.get("fields");
     const fitPreferences = formData.get("fitPreferences");
     const collarOptions = formData.get("collarOptions");
+    const customAdvancedFeatures = formData.get("customAdvancedFeatures");
     const enableStitchingNotes = formData.get("enableStitchingNotes") === "true";
 
     const updatedTemplate = await prisma.tailorTemplate.update({
@@ -386,6 +388,7 @@ export const action = async ({ request }) => {
         fields,
         fitPreferences: fitPreferences || null,
         collarOptions: collarOptions || null,
+        customFeatures: customAdvancedFeatures || null,
         enableStitchingNotes,
       },
     });
@@ -465,9 +468,12 @@ export default function Templates() {
   const [editCustomTemplateFields, setEditCustomTemplateFields] = useState([]);
   const [editCustomTemplateFitPrefs, setEditCustomTemplateFitPrefs] = useState([]);
   const [editCustomTemplateCollars, setEditCustomTemplateCollars] = useState([]);
+  const [editCustomTemplateFeatures, setEditCustomTemplateFeatures] = useState([]);
   const [editEnableFitPrefs, setEditEnableFitPrefs] = useState(false);
   const [editEnableStitchingNotes, setEditEnableStitchingNotes] = useState(false);
   const [editEnableCollars, setEditEnableCollars] = useState(false);
+  const [editNewCustomFeatureName, setEditNewCustomFeatureName] = useState("");
+  const [editDeleteCustomFeatureConfirm, setEditDeleteCustomFeatureConfirm] = useState(null);
 
   // Edit Field Modal state (within Edit Custom Template)
   const [editFieldModal, setEditFieldModal] = useState(null); // { index, field } being edited
@@ -545,6 +551,7 @@ export default function Templates() {
         fields: typeof updated.fields === "string" ? JSON.parse(updated.fields) : updated.fields,
         fitPreferences: updated.fitPreferences ? JSON.parse(updated.fitPreferences) : null,
         collarOptions: updated.collarOptions ? JSON.parse(updated.collarOptions) : null,
+        customFeatures: updated.customFeatures ? JSON.parse(updated.customFeatures) : null,
         isActive: updated.isActive,
         enableStitchingNotes: updated.enableStitchingNotes,
         dateCreated: new Date(updated.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -773,6 +780,35 @@ export default function Templates() {
     }
     // Load Stitching Notes
     setEditEnableStitchingNotes(template.enableStitchingNotes || false);
+    // Load Custom Features
+    if (template.customFeatures && template.customFeatures.length > 0) {
+      const loadedFeatures = template.customFeatures.map((cf, i) => ({
+        id: cf.id || Date.now() + i + 300,
+        name: cf.name || "",
+        enabled: cf.enabled !== false,
+        required: cf.required || false,
+        options: (cf.options || []).map((opt, j) => {
+          // Preserve image URL exactly as stored - handle both string and object formats
+          let imageValue = "";
+          if (opt.image) {
+            if (typeof opt.image === 'string') {
+              imageValue = opt.image.trim();
+            } else if (typeof opt.image === 'object' && opt.image.url) {
+              imageValue = opt.image.url.trim();
+            }
+          }
+          return {
+            id: opt.id || Date.now() + i * 100 + j,
+            name: opt.name || "",
+            image: imageValue,
+            file: null
+          };
+        })
+      }));
+      setEditCustomTemplateFeatures(loadedFeatures);
+    } else {
+      setEditCustomTemplateFeatures([]);
+    }
   };
 
   // Check if there are unsaved changes in the Edit Custom Template modal
@@ -801,6 +837,13 @@ export default function Templates() {
         normalize(editField.instruction) !== normalize(origField.instruction) ||
         normalize(editField.range) !== normalize(origField.range) ||
         normalizeBool(editField.required) !== normalizeBool(origField.required)) return true;
+      
+      // Check image changes - either URL changed or a new file was uploaded
+      const origImage = normalize(origField.image || "");
+      const editImage = normalize(editField.image || "");
+      if (editImage !== origImage) return true;
+      // Only consider it a change if a File object was actually uploaded (not null/undefined)
+      if (editField.file instanceof File) return true; // New file uploaded
     }
 
     // Check Advance Features - Fit Preferences
@@ -832,11 +875,41 @@ export default function Templates() {
         const cur = currentCollars[i];
         const orig = origCollars[i];
         if (normalize(cur.name) !== normalize(orig.name) || normalize(cur.image) !== normalize(orig.image)) return true;
+        // Only consider it a change if a File object was actually uploaded (not null/undefined)
+        if (cur.file instanceof File) return true; // New file uploaded
       }
     }
 
     // Check Stitching Notes
     if (editEnableStitchingNotes !== (original.enableStitchingNotes || false)) return true;
+
+    // Check Custom Features
+    const origCustomFeatures = original.customFeatures || [];
+    const currentCustomFeatures = editCustomTemplateFeatures;
+    if (currentCustomFeatures.length !== origCustomFeatures.length) return true;
+    
+    for (let i = 0; i < currentCustomFeatures.length; i++) {
+      const cur = currentCustomFeatures[i];
+      const orig = origCustomFeatures[i];
+      if (!orig) return true;
+      if (normalize(cur.name) !== normalize(orig.name)) return true;
+      // Normalize enabled: undefined/null treated as true (same as loading logic)
+      const curEnabled = cur.enabled !== false;
+      const origEnabled = orig.enabled !== false;
+      if (curEnabled !== origEnabled) return true;
+      if (cur.required !== (orig.required || false)) return true;
+      if ((cur.options || []).length !== (orig.options || []).length) return true;
+      
+      for (let j = 0; j < (cur.options || []).length; j++) {
+        const curOpt = cur.options[j];
+        const origOpt = orig.options[j];
+        if (!origOpt) return true;
+        if (normalize(curOpt.name) !== normalize(origOpt.name)) return true;
+        if (normalize(curOpt.image) !== normalize(origOpt.image)) return true;
+        // Only consider it a change if a File object was actually uploaded (not null/undefined)
+        if (curOpt.file instanceof File) return true; // Check for file uploads
+      }
+    }
 
     return false;
   };
@@ -855,9 +928,12 @@ export default function Templates() {
     setEditCustomTemplateFields([]);
     setEditCustomTemplateFitPrefs([]);
     setEditCustomTemplateCollars([]);
+    setEditCustomTemplateFeatures([]);
     setEditEnableFitPrefs(false);
     setEditEnableStitchingNotes(false);
     setEditEnableCollars(false);
+    setEditNewCustomFeatureName("");
+    setEditDeleteCustomFeatureConfirm(null);
     setShowEditTemplateDiscardWarning(false);
   };
 
@@ -920,6 +996,35 @@ export default function Templates() {
       }));
     }
 
+    // Process custom features option image uploads
+    let processedCustomFeatures = editCustomTemplateFeatures;
+    if (editCustomTemplateFeatures.length > 0) {
+      processedCustomFeatures = await Promise.all(editCustomTemplateFeatures.map(async (feature) => {
+        if (feature.options && feature.options.length > 0) {
+          const processedOptions = await Promise.all(feature.options.map(async (option) => {
+            if (option.file) {
+              try {
+                const fd = new FormData();
+                fd.append("file", option.file);
+                const res = await fetch("/api/upload", { method: "POST", body: fd });
+                const data = await res.json();
+                if (data.url) {
+                  const { file, ...rest } = option;
+                  return { ...rest, image: data.url };
+                }
+              } catch (e) {
+                console.error("Custom feature option image upload failed", e);
+              }
+            }
+            const { file, ...rest } = option;
+            return rest;
+          }));
+          return { ...feature, options: processedOptions };
+        }
+        return feature;
+      }));
+    }
+
     const formData = new FormData();
     formData.append("intent", "updateCustomTemplate");
     formData.append("id", editCustomTemplateModal.id);
@@ -934,6 +1039,11 @@ export default function Templates() {
     // Add Collar Options if enabled
     if (editEnableCollars) {
       formData.append("collarOptions", JSON.stringify(processedCollars.map(({ id, ...rest }) => rest)));
+    }
+
+    // Add Custom Features if any exist
+    if (processedCustomFeatures.length > 0) {
+      formData.append("customAdvancedFeatures", JSON.stringify(processedCustomFeatures.map(({ id, ...rest }) => rest)));
     }
 
     // Add Stitching Notes toggle
@@ -3682,6 +3792,258 @@ export default function Templates() {
                     </button>
                   </div>
                 )}
+
+                {/* Custom Features */}
+                {editCustomTemplateFeatures.length > 0 && (
+                  <div className="border-t border-gray-200 pt-4 mt-4 space-y-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-xs text-gray-500 font-semibold">Custom Features</p>
+                    </div>
+                    {editCustomTemplateFeatures.map((feature, featureIndex) => (
+                      <div key={feature.id}>
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <label className="flex items-center gap-3 cursor-pointer flex-1">
+                            <div className={`relative w-10 h-5 rounded-full transition-colors ${feature.enabled ? "bg-blue-600" : "bg-gray-200"}`}>
+                              <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${feature.enabled ? "translate-x-5" : ""}`} />
+                            </div>
+                            <input 
+                              type="checkbox" 
+                              checked={feature.enabled} 
+                              onChange={() => {
+                                setEditCustomTemplateFeatures(prev => prev.map(f => {
+                                  if (f.id === feature.id) {
+                                    const newEnabled = !f.enabled;
+                                    if (newEnabled && (!f.options || f.options.length === 0)) {
+                                      return { ...f, enabled: newEnabled, options: [{ id: Date.now(), name: "", image: "" }] };
+                                    }
+                                    return { ...f, enabled: newEnabled };
+                                  }
+                                  return f;
+                                }));
+                              }} 
+                              className="sr-only" 
+                            />
+                            <span className="text-sm text-gray-700">{feature.name}</span>
+                          </label>
+                          <div className="flex items-center gap-3">
+                            {feature.enabled && (
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={feature.required || false}
+                                  onChange={(e) => {
+                                    setEditCustomTemplateFeatures(prev => prev.map(f => 
+                                      f.id === feature.id ? { ...f, required: e.target.checked } : f
+                                    ));
+                                  }}
+                                  className="rounded text-red-500 focus:ring-red-500"
+                                />
+                                <span className="text-xs text-gray-600">Required</span>
+                              </label>
+                            )}
+                            <button
+                              onClick={() => setEditDeleteCustomFeatureConfirm(feature)}
+                              className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                              title="Remove feature"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* Options UI when feature is enabled */}
+                        {feature.enabled && (
+                          <div className="pl-8 space-y-3">
+                            {(feature.options || []).map((option, optionIndex) => (
+                              <div key={option.id} className="flex items-start gap-4 p-3 border rounded-lg bg-gray-50/50 hover:border-gray-200 transition-colors border-gray-100">
+                                {/* Image Upload Box */}
+                                <div className="relative flex-shrink-0">
+                                  <div className="w-24 h-24 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden bg-white hover:border-blue-500 transition-colors cursor-pointer border-gray-300">
+                                    {option.file ? (
+                                      <img 
+                                        src={URL.createObjectURL(option.file)} 
+                                        alt={option.name || "Option image"} 
+                                        className="h-full w-full object-contain p-1" 
+                                      />
+                                    ) : (option.image && typeof option.image === 'string' && option.image.trim().length > 0) ? (
+                                      <img 
+                                        src={option.image.trim()} 
+                                        alt={option.name || "Option image"} 
+                                        className="h-full w-full object-contain p-1" 
+                                        onError={(e) => {
+                                          e.target.style.display = 'none';
+                                          const placeholder = e.target.parentElement.querySelector('.image-placeholder');
+                                          if (placeholder) {
+                                            placeholder.style.display = 'flex';
+                                          }
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="flex flex-col items-center justify-center gap-1 image-placeholder">
+                                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                        </svg>
+                                        <span className="text-[9px] uppercase font-bold text-gray-400">Upload</span>
+                                      </div>
+                                    )}
+                                    <input
+                                      type="file"
+                                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                      accept="image/*"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                          setEditCustomTemplateFeatures(prev => prev.map(f => {
+                                            if (f.id === feature.id) {
+                                              return {
+                                                ...f,
+                                                options: f.options.map((opt, idx) => 
+                                                  idx === optionIndex ? { ...opt, file } : opt
+                                                )
+                                              };
+                                            }
+                                            return f;
+                                          }));
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                                {/* Option Name and Image URL */}
+                                <div className="flex-1 space-y-2">
+                                  <input
+                                    type="text"
+                                    value={option.name || ""}
+                                    onChange={(e) => {
+                                      setEditCustomTemplateFeatures(prev => prev.map(f => {
+                                        if (f.id === feature.id) {
+                                          return {
+                                            ...f,
+                                            options: f.options.map((opt, idx) => 
+                                              idx === optionIndex ? { ...opt, name: e.target.value } : opt
+                                            )
+                                          };
+                                        }
+                                        return f;
+                                      }));
+                                    }}
+                                    className="w-full px-3 py-2 text-sm font-medium border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    placeholder="Option name"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={option.image || ""}
+                                    onChange={(e) => {
+                                      setEditCustomTemplateFeatures(prev => prev.map(f => {
+                                        if (f.id === feature.id) {
+                                          return {
+                                            ...f,
+                                            options: f.options.map((opt, idx) => 
+                                              idx === optionIndex ? { ...opt, image: e.target.value, file: null } : opt
+                                            )
+                                          };
+                                        }
+                                        return f;
+                                      }));
+                                    }}
+                                    className="w-full px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    placeholder="Paste image URL or upload"
+                                  />
+                                </div>
+                                {/* Delete Option */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditCustomTemplateFeatures(prev => prev.map(f => {
+                                      if (f.id === feature.id) {
+                                        return {
+                                          ...f,
+                                          options: f.options.filter((_, idx) => idx !== optionIndex)
+                                        };
+                                      }
+                                      return f;
+                                    }));
+                                  }}
+                                  className="p-2 text-gray-400 hover:text-red-500 cursor-pointer"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditCustomTemplateFeatures(prev => prev.map(f => {
+                                  if (f.id === feature.id) {
+                                    return {
+                                      ...f,
+                                      options: [...(f.options || []), { id: Date.now(), name: "", image: "" }]
+                                    };
+                                  }
+                                  return f;
+                                }));
+                              }}
+                              className="flex items-center gap-2 text-sm text-blue-600 font-medium hover:text-blue-700 cursor-pointer"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              + Add Option
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add Custom Feature */}
+                <div className="border-t border-gray-200 pt-4 mt-4">
+                  <p className="text-xs text-gray-500 font-semibold mb-3">Add Custom Feature</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={editNewCustomFeatureName}
+                      onChange={(e) => setEditNewCustomFeatureName(e.target.value)}
+                      className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="Enter feature name (e.g., Pocket Style)"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && editNewCustomFeatureName.trim()) {
+                          setEditCustomTemplateFeatures(prev => [...prev, {
+                            id: Date.now(),
+                            name: editNewCustomFeatureName.trim(),
+                            enabled: false,
+                            required: false,
+                            options: []
+                          }]);
+                          setEditNewCustomFeatureName("");
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editNewCustomFeatureName.trim()) {
+                          setEditCustomTemplateFeatures(prev => [...prev, {
+                            id: Date.now(),
+                            name: editNewCustomFeatureName.trim(),
+                            enabled: false,
+                            required: false,
+                            options: []
+                          }]);
+                          setEditNewCustomFeatureName("");
+                        }
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 border border-gray-200 rounded-md hover:bg-gray-200 cursor-pointer transition-colors"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
               </div>
 
 
@@ -3715,6 +4077,45 @@ export default function Templates() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                 </svg>
                 {fetcher.state !== "idle" ? "Updating..." : "Update Template"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Custom Feature Confirmation Modal */}
+      {editDeleteCustomFeatureConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-[400] flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Delete Custom Feature?</h3>
+                <p className="text-sm text-gray-500">Are you sure you want to delete "{editDeleteCustomFeatureConfirm.name}"?</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-500 mb-6">This action cannot be undone.</p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setEditDeleteCustomFeatureConfirm(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditCustomTemplateFeatures(prev => prev.filter(f => f.id !== editDeleteCustomFeatureConfirm.id));
+                  setEditDeleteCustomFeatureConfirm(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-red-600 bg-red-100 border border-red-300 rounded-lg hover:bg-red-200 cursor-pointer transition-colors"
+              >
+                Delete
               </button>
             </div>
           </div>
