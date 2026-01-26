@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useLoaderData, useFetcher, useNavigate } from "react-router";
+import { useLoaderData, useFetcher, useNavigate, useSearchParams } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../../shopify.server";
 import prisma from "../../db.server";
@@ -401,9 +401,13 @@ export default function Templates() {
   const fetcher = useFetcher();
   const uploadFetcher = useFetcher();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [templates, setTemplates] = useState(initialTemplates || []);
   const [customTemplates, setCustomTemplates] = useState(initialCustomTemplates || []);
-  const [activeTab, setActiveTab] = useState("Table Templates");
+  
+  // Set initial tab based on URL parameter
+  const tabParam = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(tabParam === "custom" ? "Custom Templates" : "Table Templates");
   const [templateSearch, setTemplateSearch] = useState("");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("All");

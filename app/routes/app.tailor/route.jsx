@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useLoaderData, useFetcher } from "react-router";
+import { useLoaderData, useFetcher, useNavigate } from "react-router";
 import prisma from "../../db.server";
 import { authenticate } from "../../shopify.server";
 
@@ -230,6 +230,7 @@ export default function CustomTailor() {
     const { templates: initialTemplates, products: shopifyProducts, editingTemplate } = useLoaderData();
     const fetcher = useFetcher();
     const uploadFetcher = useFetcher();
+    const navigate = useNavigate();
 
     const [templates, setTemplates] = useState(initialTemplates || []);
     const [selectedPreset, setSelectedPreset] = useState(tailorPresets[0]);
@@ -353,37 +354,8 @@ export default function CustomTailor() {
                 return [formattedTemplate, ...prev];
             });
 
-            // In edit mode, redirect to templates page
-            if (isEditMode) {
-                window.location.href = "/app/templates";
-                return;
-            }
-
-            setTemplateName("");
-
-            // Reset fields to default preset values
-            const newFields = selectedPreset.defaultFields.map((f, i) => ({ id: Date.now() + i, ...f, enabled: true }));
-            setMeasurementFields(newFields);
-            setInitialMeasurementFields(newFields);
-
-            // Reset toggles and extended options
-            setEnableFitPreference(false);
-            setEnableStitchingNotes(false);
-            setEnableCollarOption(false);
-
-            // Reset Fit Preferences
-            setFitPreferences([
-                { id: "slim", label: "Slim", allowance: "+0.5 inch", enabled: true },
-                { id: "regular", label: "Regular", allowance: "+2.0 inch", enabled: true },
-                { id: "loose", label: "Loose", allowance: "+4.0 inch", enabled: true }
-            ]);
-
-            // Reset Collar Options
-            setCollarOptions([
-                { id: 1, name: "Button Down Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/button+down+color.png", enabled: true },
-                { id: 2, name: "Band Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/band+collar%0D%0A%0D%0A.png", enabled: true },
-                { id: 3, name: "Spread Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/spread+collar.png", enabled: true }
-            ]);
+            // Redirect to templates page with custom tab after creating/editing
+            navigate("/app/templates?tab=custom");
         } else if (fetcher.data?.success && fetcher.data?.deletedId) {
             setTemplates((prev) => prev.filter((t) => t.id !== fetcher.data.deletedId));
         } else if (fetcher.data?.success && fetcher.data?.assignedCount !== undefined) {
