@@ -232,6 +232,9 @@ export default function CustomTailor() {
     const uploadFetcher = useFetcher();
     const navigate = useNavigate();
 
+    // Maximum file size: 2MB
+    const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB in bytes
+
     const [templates, setTemplates] = useState(initialTemplates || []);
     const [selectedPreset, setSelectedPreset] = useState(tailorPresets[0]);
     const [selectedGender, setSelectedGender] = useState("male");
@@ -277,11 +280,13 @@ export default function CustomTailor() {
     const [infoModalField, setInfoModalField] = useState(null);
     const [editModalField, setEditModalField] = useState(null);
     const [editModalFile, setEditModalFile] = useState(null);
+    const [editModalFileError, setEditModalFileError] = useState(""); // File size error for edit modal
     const [originalEditModalField, setOriginalEditModalField] = useState(null); // Store original field state when modal opens
     const [originalEditModalFile, setOriginalEditModalFile] = useState(null); // Store original file state when modal opens
     const [addFieldModal, setAddFieldModal] = useState(null); // New field data when adding
     const [addFieldFile, setAddFieldFile] = useState(null); // File for new field image upload
     const [addFieldErrors, setAddFieldErrors] = useState({}); // Validation errors for add field modal
+    const [collarFileErrors, setCollarFileErrors] = useState({}); // File size errors for collar options { [index]: error }
     const [showAddFieldDiscardWarning, setShowAddFieldDiscardWarning] = useState(false); // Discard warning for add field modal
     const [assignModalTemplate, setAssignModalTemplate] = useState(null);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -495,6 +500,14 @@ export default function CustomTailor() {
     const handleAddFieldFileUpload = (event) => {
         const file = event.target.files?.[0];
         if (file) {
+            // Validate file size
+            if (file.size > MAX_FILE_SIZE) {
+                setAddFieldErrors(prev => ({ ...prev, image: `Image size must be less than 2MB. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB` }));
+                setAddFieldFile(null);
+                // Reset file input
+                event.target.value = "";
+                return;
+            }
             setAddFieldFile(file);
             // Clear image error when file is uploaded
             if (addFieldErrors.image) {
@@ -581,14 +594,34 @@ export default function CustomTailor() {
         const file = event.target.files?.[0];
         if (!file) return;
 
+        // Validate file size
+        if (file.size > MAX_FILE_SIZE) {
+            const errorMessage = `Image size must be less than 2MB. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`;
+            if (editModalField) {
+                setEditModalFileError(errorMessage);
+            } else if (uploadCollarIndex !== null) {
+                setCollarFileErrors(prev => ({ ...prev, [uploadCollarIndex]: errorMessage }));
+            }
+            // Reset file input
+            event.target.value = "";
+            return;
+        }
+
         if (editModalField) {
             setEditModalFile(file);
+            setEditModalFileError(""); // Clear any previous error
         } else if (uploadCollarIndex !== null) {
             const newCollars = [...collarOptions];
             if (newCollars[uploadCollarIndex]) {
                 newCollars[uploadCollarIndex].file = file;
                 setCollarOptions(newCollars);
             }
+            // Clear error for this collar
+            setCollarFileErrors(prev => {
+                const newErrors = { ...prev };
+                delete newErrors[uploadCollarIndex];
+                return newErrors;
+            });
             setUploadCollarIndex(null);
         }
     };
@@ -597,6 +630,7 @@ export default function CustomTailor() {
         if (forceClose) {
             setEditModalField(null);
             setEditModalFile(null);
+            setEditModalFileError(""); // Clear file size error
             setOriginalEditModalField(null);
             setOriginalEditModalFile(null);
             setShowEditDiscardWarning(false);
@@ -608,6 +642,7 @@ export default function CustomTailor() {
         if (!originalEditModalField) {
             setEditModalField(null);
             setEditModalFile(null);
+            setEditModalFileError(""); // Clear file size error
             setOriginalEditModalField(null);
             setOriginalEditModalFile(null);
             return;
@@ -635,6 +670,7 @@ export default function CustomTailor() {
         } else {
             setEditModalField(null);
             setEditModalFile(null);
+            setEditModalFileError(""); // Clear file size error
             setOriginalEditModalField(null);
             setOriginalEditModalFile(null);
         }
@@ -645,7 +681,7 @@ export default function CustomTailor() {
         setDuplicateNameError(false);
         setFieldsError(false);
         setCollarErrors({});
-        setCustomFeaturesErrors({});
+        // Don't clear customFeaturesErrors - we'll merge new validation errors with existing ones (preserving file size errors)
         setVisibilityError(false);
 
         let hasValidationError = false;
@@ -674,17 +710,25 @@ export default function CustomTailor() {
         // Validate custom advanced features
         const enabledCustomFeatures = customAdvancedFeatures.filter(f => f.enabled);
         if (enabledCustomFeatures.length > 0) {
-            const newCustomFeaturesErrors = {};
+            const newCustomFeaturesErrors = { ...customFeaturesErrors }; // Preserve existing errors (like file size errors)
             enabledCustomFeatures.forEach(feature => {
                 if (feature.options && feature.options.length > 0) {
                     feature.options.forEach(option => {
-                        const optionErrors = {};
+                        const existingErrors = newCustomFeaturesErrors[feature.id]?.[option.id] || {};
+                        const optionErrors = { ...existingErrors }; // Preserve existing errors
+                        
                         if (!option.name || !option.name.trim()) {
                             optionErrors.name = true;
                         }
-                        if (!option.image && !option.file) {
-                            optionErrors.image = true;
+                        
+                        // Only set "required" error if:
+                        // 1. There's no image and no file
+                        // 2. There's no existing file size error (preserve file size errors)
+                        const hasFileSizeError = typeof existingErrors.image === 'string' && existingErrors.image.includes('2MB');
+                        if (!option.image && !option.file && !hasFileSizeError) {
+                            optionErrors.image = "Image is required (upload or URL)";
                         }
+                        
                         if (Object.keys(optionErrors).length > 0) {
                             if (!newCustomFeaturesErrors[feature.id]) {
                                 newCustomFeaturesErrors[feature.id] = {};
@@ -1268,7 +1312,9 @@ export default function CustomTailor() {
                                             <div key={collar.id} className="flex items-start gap-4 p-3 border border-gray-100 rounded-lg bg-gray-50/50 hover:border-gray-200 transition-colors group">
                                                 {/* Image Upload Box */}
                                                 <div className="relative flex-shrink-0">
-                                                    <div className="w-24 h-24 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-white hover:border-blue-500 transition-colors cursor-pointer">
+                                                    <div className={`w-24 h-24 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden bg-white hover:border-blue-500 transition-colors cursor-pointer ${
+                                                        collarFileErrors[index] ? 'border-red-400' : 'border-gray-300'
+                                                    }`}>
                                                         {(collar.file || collar.image) ? (
                                                             <img src={collar.file ? URL.createObjectURL(collar.file) : collar.image} alt={collar.name} className="w-full h-full object-contain p-1" />
                                                         ) : (
@@ -1287,10 +1333,28 @@ export default function CustomTailor() {
                                                         onChange={(e) => {
                                                             const file = e.target.files?.[0];
                                                             if (file) {
-                                                                const formData = new FormData();
-                                                                formData.append("file", file);
+                                                                // Validate file size
+                                                                if (file.size > MAX_FILE_SIZE) {
+                                                                    const errorMessage = `Image size must be less than 2MB. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`;
+                                                                    setCollarFileErrors(prev => ({ ...prev, [index]: errorMessage }));
+                                                                    // Reset file input
+                                                                    e.target.value = "";
+                                                                    return;
+                                                                }
+                                                                // Clear any previous error
+                                                                setCollarFileErrors(prev => {
+                                                                    const newErrors = { ...prev };
+                                                                    delete newErrors[index];
+                                                                    return newErrors;
+                                                                });
+                                                                // Use handleFileUpload logic
                                                                 setUploadCollarIndex(index);
-                                                                uploadFetcher.submit(formData, { method: "post", action: "/api/upload", encType: "multipart/form-data" });
+                                                                const newCollars = [...collarOptions];
+                                                                if (newCollars[index]) {
+                                                                    newCollars[index].file = file;
+                                                                    setCollarOptions(newCollars);
+                                                                }
+                                                                setUploadCollarIndex(null);
                                                             }
                                                         }}
                                                     />
@@ -1326,6 +1390,14 @@ export default function CustomTailor() {
                                                         placeholder="Paste image URL or upload"
                                                         className={`w-full px-3 py-1 text-xs bg-white border rounded focus:outline-none focus:ring-1 ${collarErrors[collar.id]?.image ? "border-red-500 focus:ring-red-500" : "border-gray-200 focus:border-blue-500 focus:ring-blue-500"} text-gray-500`}
                                                     />
+                                                    {collarFileErrors[index] && (
+                                                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                            </svg>
+                                                            {collarFileErrors[index]}
+                                                        </p>
+                                                    )}
                                                 </div>
 
                                                 {/* Delete Button */}
@@ -1358,9 +1430,21 @@ export default function CustomTailor() {
                                     <div className="border-t border-gray-200 pt-4 mt-4 space-y-4">
                                         <div className="flex items-center justify-between mb-3">
                                             <p className="text-xs text-gray-500">Custom Features</p>
-                                            {Object.keys(customFeaturesErrors).length > 0 && (
-                                                <p className="text-xs text-red-500">Please fill all required fields</p>
-                                            )}
+                                            {(() => {
+                                                // Only show error if there are errors AND at least one enabled feature has errors
+                                                const hasEnabledFeatureErrors = Object.keys(customFeaturesErrors).some(featureId => {
+                                                    const feature = customAdvancedFeatures.find(f => {
+                                                        // Handle both number and string IDs
+                                                        const fId = typeof f.id === 'number' ? f.id : Number(f.id);
+                                                        const errId = typeof featureId === 'number' ? featureId : Number(featureId);
+                                                        return fId === errId;
+                                                    });
+                                                    return feature && feature.enabled && customFeaturesErrors[featureId] && Object.keys(customFeaturesErrors[featureId]).length > 0;
+                                                });
+                                                return hasEnabledFeatureErrors && (
+                                                    <p className="text-xs text-red-500">Please fill all required fields</p>
+                                                );
+                                            })()}
                                         </div>
                                         {customAdvancedFeatures.map((feature, featureIndex) => (
                                             <div key={feature.id}>
@@ -1373,19 +1457,42 @@ export default function CustomTailor() {
                                                             type="checkbox" 
                                                             checked={feature.enabled} 
                                                             onChange={() => {
+                                                                const newEnabled = !feature.enabled;
+                                                                
                                                                 setCustomAdvancedFeatures(prev => prev.map(f => {
                                                                     if (f.id === feature.id) {
-                                                                        const newEnabled = !f.enabled;
                                                                         // Add one default empty option when enabling and no options exist
                                                                         if (newEnabled && (!f.options || f.options.length === 0)) {
                                                                             return { ...f, enabled: newEnabled, options: [{ id: Date.now(), name: "", image: "" }] };
+                                                                        }
+                                                                        // Reset all option fields when disabling
+                                                                        if (!newEnabled && f.options && f.options.length > 0) {
+                                                                            return { 
+                                                                                ...f, 
+                                                                                enabled: newEnabled, 
+                                                                                options: f.options.map(opt => {
+                                                                                    const { file, ...rest } = opt; // Remove file property
+                                                                                    return { ...rest, name: "", image: "" }; // Reset name and image
+                                                                                })
+                                                                            };
                                                                         }
                                                                         return { ...f, enabled: newEnabled };
                                                                     }
                                                                     return f;
                                                                 }));
-                                                            }} 
-                                                            className="sr-only" 
+                                                                
+                                                                // Clear errors for this feature when disabling
+                                                                if (!newEnabled) {
+                                                                    setCustomFeaturesErrors(prev => {
+                                                                        const newErrors = { ...prev };
+                                                                        if (newErrors[feature.id]) {
+                                                                            delete newErrors[feature.id];
+                                                                        }
+                                                                        return newErrors;
+                                                                    });
+                                                                }
+                                                            }}
+                                                            className="sr-only"
                                                         />
                                                         <span className="text-sm text-gray-700">{feature.name}</span>
                                                     </label>
@@ -1447,6 +1554,24 @@ export default function CustomTailor() {
                                                                         onChange={(e) => {
                                                                             const file = e.target.files?.[0];
                                                                             if (file) {
+                                                                                // Validate file size
+                                                                                if (file.size > MAX_FILE_SIZE) {
+                                                                                    const errorMessage = `Image size must be less than 2MB. Current size: ${(file.size / (1024 * 1024)).toFixed(2)}MB`;
+                                                                                    setCustomFeaturesErrors(prev => {
+                                                                                        const newErrors = { ...prev };
+                                                                                        if (!newErrors[feature.id]) {
+                                                                                            newErrors[feature.id] = {};
+                                                                                        }
+                                                                                        if (!newErrors[feature.id][option.id]) {
+                                                                                            newErrors[feature.id][option.id] = {};
+                                                                                        }
+                                                                                        newErrors[feature.id][option.id].image = errorMessage;
+                                                                                        return newErrors;
+                                                                                    });
+                                                                                    // Reset file input
+                                                                                    e.target.value = "";
+                                                                                    return;
+                                                                                }
                                                                                 setCustomAdvancedFeatures(prev => prev.map(f => {
                                                                                     if (f.id === feature.id) {
                                                                                         const newOptions = [...(f.options || [])];
@@ -1553,7 +1678,11 @@ export default function CustomTailor() {
                                                                             }`}
                                                                         />
                                                                         {customFeaturesErrors[feature.id]?.[option.id]?.image && (
-                                                                            <p className="text-xs text-red-500 mt-1">Image is required (upload or URL)</p>
+                                                                            <p className="text-xs text-red-500 mt-1">
+                                                                                {typeof customFeaturesErrors[feature.id][option.id].image === 'string' 
+                                                                                    ? customFeaturesErrors[feature.id][option.id].image 
+                                                                                    : "Image is required (upload or URL)"}
+                                                                            </p>
                                                                         )}
                                                                     </div>
                                                                 </div>
@@ -1856,6 +1985,14 @@ export default function CustomTailor() {
                                         />
                                         <p className="text-xs text-gray-400">Click the image box to upload or paste a URL</p>
                                         {uploadFetcher.state !== "idle" && <p className="text-xs text-blue-600 font-medium animate-pulse">Uploading image...</p>}
+                                        {editModalFileError && (
+                                            <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                </svg>
+                                                {editModalFileError}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -1903,6 +2040,7 @@ export default function CustomTailor() {
                                     // Close modal and reset states after saving
                                     setEditModalField(null);
                                     setEditModalFile(null);
+                                    setEditModalFileError(""); // Clear file size error
                                     setOriginalEditModalField(null);
                                     setOriginalEditModalFile(null);
                                 }}
