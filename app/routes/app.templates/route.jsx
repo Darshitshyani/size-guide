@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useLoaderData, useFetcher } from "react-router";
+import { useLoaderData, useFetcher, useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../../shopify.server";
 import prisma from "../../db.server";
@@ -400,6 +400,7 @@ export default function Templates() {
   const { templates: initialTemplates, customTemplates: initialCustomTemplates, products: shopifyProducts } = useLoaderData();
   const fetcher = useFetcher();
   const uploadFetcher = useFetcher();
+  const navigate = useNavigate();
   const [templates, setTemplates] = useState(initialTemplates || []);
   const [customTemplates, setCustomTemplates] = useState(initialCustomTemplates || []);
   const [activeTab, setActiveTab] = useState("Table Templates");
@@ -1505,7 +1506,7 @@ export default function Templates() {
               type="button"
               onClick={() => {
                 if (activeTab === "Custom Templates") {
-                  window.location.href = "/app/tailor";
+                  navigate("/app/tailor");
                 } else {
                   handleOpenCreateModal();
                 }

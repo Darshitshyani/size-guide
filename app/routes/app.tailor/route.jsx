@@ -237,13 +237,16 @@ export default function CustomTailor() {
     const [templateName, setTemplateName] = useState("");
     const [measurementFields, setMeasurementFields] = useState(tailorPresets[0].defaultFields.map((f, i) => ({ id: Date.now() + i, ...f, enabled: true })));
     const [enableFitPreference, setEnableFitPreference] = useState(false);
+    const [fitPreferenceRequired, setFitPreferenceRequired] = useState(false);
     const [fitPreferences, setFitPreferences] = useState([
         { id: "slim", label: "Slim", allowance: "+0.5 inch", enabled: true },
         { id: "regular", label: "Regular", allowance: "+2.0 inch", enabled: true },
         { id: "loose", label: "Loose", allowance: "+4.0 inch", enabled: true }
     ]);
     const [enableStitchingNotes, setEnableStitchingNotes] = useState(false);
+    const [stitchingNotesRequired, setStitchingNotesRequired] = useState(false);
     const [enableCollarOption, setEnableCollarOption] = useState(false);
+    const [collarOptionRequired, setCollarOptionRequired] = useState(false);
     const [collarOptions, setCollarOptions] = useState([
         { id: 1, name: "Button Down Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/button+down+color.png", enabled: true },
         { id: 2, name: "Band Collar", image: "https://sizechartimages.s3.ap-south-1.amazonaws.com/images/collars/band+collar%0D%0A%0D%0A.png", enabled: true },
@@ -258,6 +261,11 @@ export default function CustomTailor() {
     const [fieldsError, setFieldsError] = useState(false);
     const [collarErrors, setCollarErrors] = useState({}); // { [id]: { name: bool, image: bool } }
     const [customFeaturesErrors, setCustomFeaturesErrors] = useState({}); // { [featureId]: { [optionId]: { name: bool, image: bool } } }
+    
+    // Custom preset visibility options
+    const [showMeasurementFields, setShowMeasurementFields] = useState(true);
+    const [showAdvancedFeatures, setShowAdvancedFeatures] = useState(true);
+    const [visibilityError, setVisibilityError] = useState(false);
 
     // Edit mode state
     const [isEditMode, setIsEditMode] = useState(false);
@@ -416,6 +424,10 @@ export default function CustomTailor() {
             setMeasurementFields(newFields);
             setInitialMeasurementFields(newFields);
             setTemplateName("");
+            // Reset visibility options for Custom preset
+            setShowMeasurementFields(true);
+            setShowAdvancedFeatures(true);
+            setVisibilityError(false);
             return;
         }
 
@@ -431,6 +443,10 @@ export default function CustomTailor() {
         setSelectedPreset(preset);
         setMeasurementFields(newFields);
         setInitialMeasurementFields(newFields);
+        // Reset visibility options for Custom preset
+        setShowMeasurementFields(true);
+        setShowAdvancedFeatures(true);
+        setVisibilityError(false);
     };
 
     const handleAddField = () => {
@@ -658,6 +674,7 @@ export default function CustomTailor() {
         setFieldsError(false);
         setCollarErrors({});
         setCustomFeaturesErrors({});
+        setVisibilityError(false);
 
         let hasValidationError = false;
 
@@ -666,6 +683,13 @@ export default function CustomTailor() {
             hasValidationError = true;
         } else if (templates.some(t => t.name.toLowerCase() === templateName.trim().toLowerCase() && (!isEditMode || t.id !== editingTemplateId))) {
             setDuplicateNameError(true);
+            hasValidationError = true;
+        }
+
+        // Validate visibility options for Custom preset
+        const isCustomPreset = selectedPreset.id === "male-custom" || selectedPreset.id === "female-custom";
+        if (isCustomPreset && !showMeasurementFields && !showAdvancedFeatures) {
+            setVisibilityError(true);
             hasValidationError = true;
         }
 
@@ -897,7 +921,65 @@ export default function CustomTailor() {
                     </div>
                 </div>
 
-                <div className="flex gap-6">
+                {/* Custom Preset Visibility Options */}
+                {(selectedPreset.id === "male-custom" || selectedPreset.id === "female-custom") && (
+                    <div className="mb-6">
+                        <div className={`bg-white border rounded-lg p-4 ${visibilityError ? 'border-red-300' : 'border-gray-200'}`}>
+                            <h3 className="text-sm font-semibold text-gray-900 mb-3">Customer Preview Options</h3>
+                            <p className="text-xs text-gray-500 mb-4">Select what to show in the customer form preview</p>
+                            
+                            <div className="flex flex-wrap gap-6">
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <div className={`relative w-11 h-6 rounded-full transition-colors ${showMeasurementFields ? "bg-blue-600" : "bg-gray-200"}`}>
+                                        <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${showMeasurementFields ? "translate-x-5" : ""}`} />
+                                    </div>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={showMeasurementFields} 
+                                        onChange={(e) => {
+                                            setShowMeasurementFields(e.target.checked);
+                                            setVisibilityError(false);
+                                        }} 
+                                        className="sr-only" 
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                        </svg>
+                                        <span className="text-sm font-medium text-gray-700">Show Measurement Fields</span>
+                                    </div>
+                                </label>
+                                
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <div className={`relative w-11 h-6 rounded-full transition-colors ${showAdvancedFeatures ? "bg-blue-600" : "bg-gray-200"}`}>
+                                        <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${showAdvancedFeatures ? "translate-x-5" : ""}`} />
+                                    </div>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={showAdvancedFeatures} 
+                                        onChange={(e) => {
+                                            setShowAdvancedFeatures(e.target.checked);
+                                            setVisibilityError(false);
+                                        }} 
+                                        className="sr-only" 
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                                        </svg>
+                                        <span className="text-sm font-medium text-gray-700">Show Advanced Features</span>
+                                    </div>
+                                </label>
+                            </div>
+                            
+                            {visibilityError && (
+                                <p className="mt-3 text-sm text-red-600">Please select at least one option to show in the customer preview.</p>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex gap-6 items-start">
                     {/* Left: Measurement Fields */}
                     <div className="flex-1">
                         <div className="bg-white border border-gray-200 rounded-lg">
@@ -1069,13 +1151,27 @@ export default function CustomTailor() {
                         <div className="mt-6 bg-white border border-gray-200 rounded-lg p-5">
                             <h3 className="text-base font-semibold text-gray-900 mb-4">Advanced Features</h3>
                             <div className="space-y-4">
-                                <label className="flex items-center gap-3 cursor-pointer">
-                                    <div className={`relative w-10 h-5 rounded-full transition-colors ${enableFitPreference ? "bg-blue-600" : "bg-gray-200"}`}>
-                                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${enableFitPreference ? "translate-x-5" : ""}`} />
-                                    </div>
-                                    <input type="checkbox" checked={enableFitPreference} onChange={() => setEnableFitPreference(!enableFitPreference)} className="sr-only" />
-                                    <span className="text-sm text-gray-700">Enable Fit Preference</span>
-                                </label>
+                                {/* Fit Preference */}
+                                <div className="flex items-center justify-between">
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                        <div className={`relative w-10 h-5 rounded-full transition-colors ${enableFitPreference ? "bg-blue-600" : "bg-gray-200"}`}>
+                                            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${enableFitPreference ? "translate-x-5" : ""}`} />
+                                        </div>
+                                        <input type="checkbox" checked={enableFitPreference} onChange={() => setEnableFitPreference(!enableFitPreference)} className="sr-only" />
+                                        <span className="text-sm text-gray-700">Enable Fit Preference</span>
+                                    </label>
+                                    {enableFitPreference && (
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={fitPreferenceRequired}
+                                                onChange={(e) => setFitPreferenceRequired(e.target.checked)}
+                                                className="rounded text-red-500 focus:ring-red-500"
+                                            />
+                                            <span className="text-xs text-gray-600">Required</span>
+                                        </label>
+                                    )}
+                                </div>
 
                                 {enableFitPreference && (
                                     <div className="pl-8 space-y-3">
@@ -1120,21 +1216,50 @@ export default function CustomTailor() {
                                         ))}
                                     </div>
                                 )}
-                                <label className="flex items-center gap-3 cursor-pointer">
-                                    <div className={`relative w-10 h-5 rounded-full transition-colors ${enableStitchingNotes ? "bg-blue-600" : "bg-gray-200"}`}>
-                                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${enableStitchingNotes ? "translate-x-5" : ""} `} />
-                                    </div>
-                                    <input type="checkbox" checked={enableStitchingNotes} onChange={() => setEnableStitchingNotes(!enableStitchingNotes)} className="sr-only" />
-                                    <span className="text-sm text-gray-700">Enable Stitching Notes</span>
-                                </label>
 
-                                <label className="flex items-center gap-3 cursor-pointer">
-                                    <div className={`relative w-10 h-5 rounded-full transition-colors ${enableCollarOption ? "bg-blue-600" : "bg-gray-200"}`}>
-                                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${enableCollarOption ? "translate-x-5" : ""} `} />
-                                    </div>
-                                    <input type="checkbox" checked={enableCollarOption} onChange={() => setEnableCollarOption(!enableCollarOption)} className="sr-only" />
-                                    <span className="text-sm text-gray-700">Enable Collar Option</span>
-                                </label>
+                                {/* Stitching Notes */}
+                                <div className="flex items-center justify-between">
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                        <div className={`relative w-10 h-5 rounded-full transition-colors ${enableStitchingNotes ? "bg-blue-600" : "bg-gray-200"}`}>
+                                            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${enableStitchingNotes ? "translate-x-5" : ""} `} />
+                                        </div>
+                                        <input type="checkbox" checked={enableStitchingNotes} onChange={() => setEnableStitchingNotes(!enableStitchingNotes)} className="sr-only" />
+                                        <span className="text-sm text-gray-700">Enable Stitching Notes</span>
+                                    </label>
+                                    {enableStitchingNotes && (
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={stitchingNotesRequired}
+                                                onChange={(e) => setStitchingNotesRequired(e.target.checked)}
+                                                className="rounded text-red-500 focus:ring-red-500"
+                                            />
+                                            <span className="text-xs text-gray-600">Required</span>
+                                        </label>
+                                    )}
+                                </div>
+
+                                {/* Collar Option */}
+                                <div className="flex items-center justify-between">
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                        <div className={`relative w-10 h-5 rounded-full transition-colors ${enableCollarOption ? "bg-blue-600" : "bg-gray-200"}`}>
+                                            <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${enableCollarOption ? "translate-x-5" : ""} `} />
+                                        </div>
+                                        <input type="checkbox" checked={enableCollarOption} onChange={() => setEnableCollarOption(!enableCollarOption)} className="sr-only" />
+                                        <span className="text-sm text-gray-700">Enable Collar Option</span>
+                                    </label>
+                                    {enableCollarOption && (
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={collarOptionRequired}
+                                                onChange={(e) => setCollarOptionRequired(e.target.checked)}
+                                                className="rounded text-red-500 focus:ring-red-500"
+                                            />
+                                            <span className="text-xs text-gray-600">Required</span>
+                                        </label>
+                                    )}
+                                </div>
 
                                 {enableCollarOption && (
                                     <div className="pl-8 space-y-3">
@@ -1263,15 +1388,32 @@ export default function CustomTailor() {
                                                         />
                                                         <span className="text-sm text-gray-700">{feature.name}</span>
                                                     </label>
-                                                    <button
-                                                        onClick={() => setDeleteCustomFeatureConfirm(feature)}
-                                                        className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-                                                        title="Remove feature"
-                                                    >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                        </svg>
-                                                    </button>
+                                                    <div className="flex items-center gap-3">
+                                                        {feature.enabled && (
+                                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={feature.required || false}
+                                                                    onChange={(e) => {
+                                                                        setCustomAdvancedFeatures(prev => prev.map(f => 
+                                                                            f.id === feature.id ? { ...f, required: e.target.checked } : f
+                                                                        ));
+                                                                    }}
+                                                                    className="rounded text-red-500 focus:ring-red-500"
+                                                                />
+                                                                <span className="text-xs text-gray-600">Required</span>
+                                                            </label>
+                                                        )}
+                                                        <button
+                                                            onClick={() => setDeleteCustomFeatureConfirm(feature)}
+                                                            className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                                                            title="Remove feature"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 
                                                 {/* Options UI when feature is enabled */}
@@ -1510,8 +1652,8 @@ export default function CustomTailor() {
                     </div>
 
                     {/* Right: Customer Form Preview */}
-                    <div className="w-80 h-fit">
-                        <div className="bg-white border border-gray-200 rounded-lg p-6 sticky top-6 h-fit">
+                    <div className="w-80 self-start sticky top-4">
+                        <div className="bg-white border border-gray-200 rounded-lg p-6">
                             <h3 className="text-base font-semibold text-gray-900 mb-4">Customer Form Preview</h3>
                             <div className="border border-gray-100 rounded-lg p-6 bg-gray-50 flex flex-col items-start justify-center ">
 
@@ -2013,11 +2155,18 @@ export default function CustomTailor() {
                     }}
                 >
                     {(() => {
-                        const enabledFields = measurementFields.filter(f => f.enabled);
+                        // Check if Custom preset is selected
+                        const isCustomPreset = selectedPreset.id === "male-custom" || selectedPreset.id === "female-custom";
+                        
+                        // Apply visibility settings for Custom preset
+                        const shouldShowMeasurements = isCustomPreset ? showMeasurementFields : true;
+                        const shouldShowAdvanced = isCustomPreset ? showAdvancedFeatures : true;
+                        
+                        const enabledFields = shouldShowMeasurements ? measurementFields.filter(f => f.enabled) : [];
                         const totalMeasurementSteps = enabledFields.length;
                         
                         // Calculate total steps: measurements + advanced options (if any) + review step
-                        const hasAdvancedOptions = enableFitPreference || enableStitchingNotes || enableCollarOption || customAdvancedFeatures.filter(f => f.enabled && f.options?.length > 0).length > 0;
+                        const hasAdvancedOptions = shouldShowAdvanced && (enableFitPreference || enableStitchingNotes || enableCollarOption || customAdvancedFeatures.filter(f => f.enabled && f.options?.length > 0).length > 0);
                         const advancedOptionsStep = hasAdvancedOptions ? 1 : 0;
                         const reviewStep = 1; // Always have a review step
                         const totalSteps = totalMeasurementSteps + advancedOptionsStep + reviewStep;
@@ -2028,7 +2177,7 @@ export default function CustomTailor() {
                         const isOnReviewStep = previewCurrentStep === totalMeasurementSteps + advancedOptionsStep;
                         
                         return (
-                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] min-h-[90vh] flex flex-col overflow-hidden">
                                 {/* Header */}
                                 <div className="px-5 pt-4 pb-3 border-b border-gray-100">
                                     <div className="flex items-center justify-between mb-4">
@@ -2067,7 +2216,7 @@ export default function CustomTailor() {
                                             {/* Step dots */}
                                             <div className="relative flex justify-between">
                                                 {enabledFields.map((field, index) => {
-                                                    const isCompleted = index < previewCurrentStep || previewMeasurementValues[field.id];
+                                                    const hasValue = previewMeasurementValues[field.id] && previewMeasurementValues[field.id].trim() !== '';
                                                     const isCurrent = index === previewCurrentStep;
                                                     
                                                     return (
@@ -2079,12 +2228,14 @@ export default function CustomTailor() {
                                                         >
                                                             <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
                                                                 isCurrent 
-                                                                    ? 'bg-gray-900 text-white ring-4 ring-gray-900/20' 
-                                                                    : isCompleted
+                                                                    ? hasValue 
+                                                                        ? 'bg-green-500 text-white ring-4 ring-green-500/20'
+                                                                        : 'bg-gray-900 text-white ring-4 ring-gray-900/20' 
+                                                                    : hasValue
                                                                         ? 'bg-green-500 text-white'
                                                                         : 'bg-white border-2 border-gray-300 text-gray-400 group-hover:border-gray-400'
                                                             }`}>
-                                                                {isCompleted && !isCurrent ? (
+                                                                {hasValue ? (
                                                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                                                                     </svg>
@@ -2093,7 +2244,7 @@ export default function CustomTailor() {
                                                                 )}
                                                             </div>
                                                             <span className={`mt-1.5 text-[10px] font-medium max-w-[50px] truncate ${
-                                                                isCurrent ? 'text-gray-900' : 'text-gray-500'
+                                                                isCurrent ? 'text-gray-900' : hasValue ? 'text-green-600' : 'text-gray-500'
                                                             }`}>
                                                                 {field.name}
                                                             </span>
@@ -2102,36 +2253,47 @@ export default function CustomTailor() {
                                                 })}
                                                 
                                                 {/* Options step */}
-                                                {hasAdvancedOptions && (
-                                                    <button
-                                                        onClick={() => setPreviewCurrentStep(totalMeasurementSteps)}
-                                                        className="flex flex-col items-center cursor-pointer group"
-                                                        title="Options"
-                                                    >
-                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
-                                                            isOnAdvancedStep 
-                                                                ? 'bg-gray-900 text-white ring-4 ring-gray-900/20' 
-                                                                : previewCurrentStep > totalMeasurementSteps
-                                                                    ? 'bg-green-500 text-white'
-                                                                    : 'bg-white border-2 border-gray-300 text-gray-400 group-hover:border-gray-400'
-                                                        }`}>
-                                                            {previewCurrentStep > totalMeasurementSteps ? (
-                                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                                </svg>
-                                                            ) : (
-                                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                                                                </svg>
-                                                            )}
-                                                        </div>
-                                                        <span className={`mt-1.5 text-[10px] font-medium ${
-                                                            isOnAdvancedStep ? 'text-gray-900' : 'text-gray-500'
-                                                        }`}>
-                                                            Options
-                                                        </span>
-                                                    </button>
-                                                )}
+                                                {hasAdvancedOptions && (() => {
+                                                    // Check if user has selected any options
+                                                    const hasSelectedOptions = 
+                                                        (enableFitPreference && previewSelectedFit !== null) ||
+                                                        (enableStitchingNotes && previewStitchingNotes.trim() !== '') ||
+                                                        (enableCollarOption && previewSelectedCollar !== null) ||
+                                                        Object.keys(previewSelectedCustomOptions).length > 0;
+                                                    
+                                                    return (
+                                                        <button
+                                                            onClick={() => setPreviewCurrentStep(totalMeasurementSteps)}
+                                                            className="flex flex-col items-center cursor-pointer group"
+                                                            title="Options"
+                                                        >
+                                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                                                                isOnAdvancedStep 
+                                                                    ? hasSelectedOptions
+                                                                        ? 'bg-green-500 text-white ring-4 ring-green-500/20'
+                                                                        : 'bg-gray-900 text-white ring-4 ring-gray-900/20' 
+                                                                    : hasSelectedOptions
+                                                                        ? 'bg-green-500 text-white'
+                                                                        : 'bg-white border-2 border-gray-300 text-gray-400 group-hover:border-gray-400'
+                                                            }`}>
+                                                                {hasSelectedOptions ? (
+                                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                ) : (
+                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                                                                    </svg>
+                                                                )}
+                                                            </div>
+                                                            <span className={`mt-1.5 text-[10px] font-medium ${
+                                                                isOnAdvancedStep ? 'text-gray-900' : hasSelectedOptions ? 'text-green-600' : 'text-gray-500'
+                                                            }`}>
+                                                                Options
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })()}
                                                 
                                                 {/* Review step */}
                                                 <button
@@ -2165,12 +2327,13 @@ export default function CustomTailor() {
                                     {isOnMeasurementStep && currentField && (
                                         <div className="p-6">
                                             {/* Title */}
-                                            <div className="text-center mb-4">
-                                                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Step {previewCurrentStep + 1} of {totalSteps}</p>
+                                            <div className="text-center mb-4 flex  items-center justify-between">
+                                               
                                                 <h2 className="text-xl font-bold text-gray-900">
                                                     {currentField.name}
                                                     {currentField.required && <span className="text-red-500 ml-1">*</span>}
                                                 </h2>
+                                                <p className="text-xs text-gray-400 uppercase tracking-wider">Step {previewCurrentStep + 1} of {totalSteps}</p>
                                             </div>
 
                                             {/* Guide Image */}
@@ -2216,7 +2379,7 @@ export default function CustomTailor() {
                                             {/* Input Field */}
                                             <div className="space-y-3">
                                                 <label className="text-sm font-medium text-gray-700">Enter your measurement ({currentField.unit})</label>
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-3 mt-2">
                                                     <div className="flex-1 relative">
                                                         <input
                                                             type="text"
@@ -2248,7 +2411,10 @@ export default function CustomTailor() {
                                             {enableFitPreference && (
                                                 <div className="bg-gray-50 rounded-xl p-4">
                                                     <div className="flex items-center justify-between mb-3">
-                                                        <h3 className="text-sm font-semibold text-gray-900">Fit Preference</h3>
+                                                        <h3 className="text-sm font-semibold text-gray-900">
+                                                            Fit Preference
+                                                            {fitPreferenceRequired && <span className="text-red-500 ml-1">*</span>}
+                                                        </h3>
                                                         {previewSelectedFit !== null && (
                                                             <button
                                                                 type="button"
@@ -2282,7 +2448,10 @@ export default function CustomTailor() {
                                             {/* Stitching Notes */}
                                             {enableStitchingNotes && (
                                                 <div className="bg-gray-50 rounded-xl p-4">
-                                                    <h3 className="text-sm font-semibold text-gray-900 mb-2">Stitching Notes</h3>
+                                                    <h3 className="text-sm font-semibold text-gray-900 mb-2">
+                                                        Stitching Notes
+                                                        {stitchingNotesRequired && <span className="text-red-500 ml-1">*</span>}
+                                                    </h3>
                                                     <textarea
                                                         value={previewStitchingNotes}
                                                         onChange={(e) => setPreviewStitchingNotes(e.target.value)}
@@ -2297,7 +2466,10 @@ export default function CustomTailor() {
                                             {enableCollarOption && (
                                                 <div className="bg-gray-50 rounded-xl p-4">
                                                     <div className="flex items-center justify-between mb-3">
-                                                        <h3 className="text-sm font-semibold text-gray-900">Collar Style</h3>
+                                                        <h3 className="text-sm font-semibold text-gray-900">
+                                                            Collar Style
+                                                            {collarOptionRequired && <span className="text-red-500 ml-1">*</span>}
+                                                        </h3>
                                                         {previewSelectedCollar !== null && (
                                                             <button
                                                                 type="button"
@@ -2342,7 +2514,10 @@ export default function CustomTailor() {
                                             {customAdvancedFeatures.filter(f => f.enabled && f.options?.length > 0).map((feature) => (
                                                 <div key={feature.id} className="bg-gray-50 rounded-xl p-4">
                                                     <div className="flex items-center justify-between mb-3">
-                                                        <h3 className="text-sm font-semibold text-gray-900">{feature.name}</h3>
+                                                        <h3 className="text-sm font-semibold text-gray-900">
+                                                            {feature.name}
+                                                            {feature.required && <span className="text-red-500 ml-1">*</span>}
+                                                        </h3>
                                                         {previewSelectedCustomOptions[feature.id] && (
                                                             <button
                                                                 type="button"
@@ -2439,10 +2614,15 @@ export default function CustomTailor() {
                                                                             {field.required && <span className="text-red-500 ml-0.5">*</span>}
                                                                         </td>
                                                                         <td className="py-2.5 px-4 text-right">
-                                                                            {previewMeasurementValues[field.id] ? (
+                                                                            {previewMeasurementValues[field.id] && previewMeasurementValues[field.id].trim() !== '' ? (
                                                                                 <span className="font-medium text-gray-900">{previewMeasurementValues[field.id]} {field.unit}</span>
                                                                             ) : (
-                                                                                <span className="text-gray-400 italic">Not entered</span>
+                                                                                <button
+                                                                                    onClick={() => setPreviewCurrentStep(index)}
+                                                                                    className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                                                                                >
+                                                                                    + Add value
+                                                                                </button>
                                                                             )}
                                                                         </td>
                                                                     </tr>
@@ -2467,7 +2647,10 @@ export default function CustomTailor() {
                                                             <tbody>
                                                                 {enableFitPreference && (
                                                                     <tr className="bg-white border-b border-gray-100">
-                                                                        <td className="py-2.5 px-4 text-gray-700">Fit Preference</td>
+                                                                        <td className="py-2.5 px-4 text-gray-700">
+                                                                            Fit Preference
+                                                                            {fitPreferenceRequired && <span className="text-red-500 ml-0.5">*</span>}
+                                                                        </td>
                                                                         <td className="py-2.5 px-4 text-right">
                                                                             {previewSelectedFit !== null ? (
                                                                                 <span className="font-medium text-gray-900">
@@ -2481,7 +2664,10 @@ export default function CustomTailor() {
                                                                 )}
                                                                 {enableStitchingNotes && (
                                                                     <tr className="bg-gray-50 border-b border-gray-100">
-                                                                        <td className="py-2.5 px-4 text-gray-700">Stitching Notes</td>
+                                                                        <td className="py-2.5 px-4 text-gray-700">
+                                                                            Stitching Notes
+                                                                            {stitchingNotesRequired && <span className="text-red-500 ml-0.5">*</span>}
+                                                                        </td>
                                                                         <td className="py-2.5 px-4 text-right">
                                                                             {previewStitchingNotes ? (
                                                                                 <span className="font-medium text-gray-900 max-w-[150px] truncate inline-block">{previewStitchingNotes}</span>
@@ -2493,7 +2679,10 @@ export default function CustomTailor() {
                                                                 )}
                                                                 {enableCollarOption && (
                                                                     <tr className="bg-white border-b border-gray-100">
-                                                                        <td className="py-2.5 px-4 text-gray-700">Collar Style</td>
+                                                                        <td className="py-2.5 px-4 text-gray-700">
+                                                                            Collar Style
+                                                                            {collarOptionRequired && <span className="text-red-500 ml-0.5">*</span>}
+                                                                        </td>
                                                                         <td className="py-2.5 px-4 text-right">
                                                                             {previewSelectedCollar !== null ? (
                                                                                 <span className="font-medium text-gray-900">
@@ -2507,7 +2696,10 @@ export default function CustomTailor() {
                                                                 )}
                                                                 {customAdvancedFeatures.filter(f => f.enabled && f.options?.length > 0).map((feature, index) => (
                                                                     <tr key={feature.id} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                                                        <td className="py-2.5 px-4 text-gray-700">{feature.name}</td>
+                                                                        <td className="py-2.5 px-4 text-gray-700">
+                                                                            {feature.name}
+                                                                            {feature.required && <span className="text-red-500 ml-0.5">*</span>}
+                                                                        </td>
                                                                         <td className="py-2.5 px-4 text-right">
                                                                             {previewSelectedCustomOptions[feature.id] ? (
                                                                                 <span className="font-medium text-gray-900">
@@ -2525,23 +2717,17 @@ export default function CustomTailor() {
                                                 </div>
                                             )}
 
-                                            {/* Edit buttons */}
-                                            <div className="mt-5 flex gap-2">
-                                                <button
-                                                    onClick={() => setPreviewCurrentStep(0)}
-                                                    className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                                                >
-                                                    Edit Measurements
-                                                </button>
-                                                {hasAdvancedOptions && (
+                                            {/* Edit Options button */}
+                                            {hasAdvancedOptions && (
+                                                <div className="mt-5">
                                                     <button
                                                         onClick={() => setPreviewCurrentStep(totalMeasurementSteps)}
-                                                        className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                                                        className="w-full px-3 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                                                     >
                                                         Edit Options
                                                     </button>
-                                                )}
-                                            </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
