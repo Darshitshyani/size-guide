@@ -662,8 +662,7 @@ export default function Templates() {
   // Edit Custom Template modal state
   const [editCustomTemplateModal, setEditCustomTemplateModal] = useState(null); // Template being edited
   const [editCustomTemplateName, setEditCustomTemplateName] = useState("");
-  const [editCustomTemplatePrice, setEditCustomTemplatePrice] = useState("");
-  const [editCustomTemplateCurrency, setEditCustomTemplateCurrency] = useState("USD");
+ 
   const [editCustomTemplateFields, setEditCustomTemplateFields] = useState([]);
   const [editCustomTemplateFitPrefs, setEditCustomTemplateFitPrefs] = useState([]);
   const [editCustomTemplateCollars, setEditCustomTemplateCollars] = useState([]);
@@ -942,12 +941,7 @@ export default function Templates() {
   const handleOpenEditCustomTemplateModal = (template) => {
     setEditCustomTemplateModal(template);
     setEditCustomTemplateName(template.name);
-    setEditCustomTemplatePrice(
-      typeof template.price === "number" && !isNaN(template.price)
-        ? String(template.price)
-        : ""
-    );
-    setEditCustomTemplateCurrency((template.currency || "USD").toUpperCase());
+   
     // Clone fields with IDs for editing
     const fieldsWithIds = (template.fields || []).map((f, i) => ({ id: Date.now() + i, ...f, enabled: f.enabled !== false }));
     setEditCustomTemplateFields(fieldsWithIds);
@@ -1029,18 +1023,7 @@ export default function Templates() {
     // Check name
     if (normalize(editCustomTemplateName) !== normalize(original.name)) return true;
 
-    // Check pricing
-    const origPrice = original.price;
-    const currentPrice =
-      editCustomTemplatePrice === ""
-        ? null
-        : parseFloat(String(editCustomTemplatePrice));
-    if ((origPrice ?? null) !== (Number.isNaN(currentPrice) ? null : currentPrice))
-      return true;
-
-    const origCurrency = (original.currency || "USD").toUpperCase();
-    if ((editCustomTemplateCurrency || "USD").toUpperCase() !== origCurrency)
-      return true;
+  
 
     // Check fields length
     const originalFields = original.fields || [];
@@ -1265,13 +1248,6 @@ export default function Templates() {
       formData.append("customAdvancedFeatures", JSON.stringify(processedCustomFeatures.map(({ id, ...rest }) => rest)));
     }
 
-    // Pricing
-    if (editCustomTemplatePrice !== "") {
-      formData.append("price", editCustomTemplatePrice);
-    } else {
-      formData.append("price", "");
-    }
-    formData.append("currency", editCustomTemplateCurrency || "USD");
 
     // Add Stitching Notes toggle
     formData.append("enableStitchingNotes", editEnableStitchingNotes.toString());
@@ -2008,7 +1984,6 @@ export default function Templates() {
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">DATE CREATED</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">GENDER</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">TYPE</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">PRICE</th>
                   <th className="px-5 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">STATUS</th>
                   <th className="px-5 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">ACTIONS</th>
                 </tr>
@@ -2047,25 +2022,7 @@ export default function Templates() {
                         {template.clothingType}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 whitespace-nowrap">
-                      <div className="flex flex-col items-start">
-                        {typeof template.price === "number" ? (
-                          <>
-                            <span className="text-sm font-medium text-gray-900">
-                              {new Intl.NumberFormat(undefined, {
-                                style: "currency",
-                                currency: template.currency || "USD",
-                              }).format(template.price)}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {(template.currency || "USD").toUpperCase()}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-gray-400 text-xs italic">Not set</span>
-                        )}
-                      </div>
-                    </td>
+                    
                     <td className="px-5 py-3.5 whitespace-nowrap">
                       <div className="flex items-center justify-center gap-2.5">
                         <button
@@ -4122,13 +4079,13 @@ export default function Templates() {
             <div className="flex-1 overflow-auto p-5 space-y-6">
               {/* Template Name & Pricing */}
               <div>
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-2">
                   <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                   <span className="text-sm font-semibold text-gray-900">Template Information</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,1.2fr)] gap-4">
+               
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">Template Name</label>
                     <input
@@ -4139,47 +4096,8 @@ export default function Templates() {
                       placeholder="Template name"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1.5">Pricing (optional)</label>
-                    <div className="flex gap-3 items-end">
-                      <div className="flex-1">
-                        <div className="relative">
-                          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-xs text-gray-400 pointer-events-none">
-                            {editCustomTemplateCurrency === "USD" && "$"}
-                            {editCustomTemplateCurrency === "EUR" && "€"}
-                            {editCustomTemplateCurrency === "GBP" && "£"}
-                            {editCustomTemplateCurrency === "INR" && "₹"}
-                            {editCustomTemplateCurrency === "AUD" && "A$"}
-                            {editCustomTemplateCurrency === "CAD" && "C$"}
-                          </span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={editCustomTemplatePrice}
-                            onChange={(e) => setEditCustomTemplatePrice(e.target.value)}
-                            placeholder="0.00"
-                            className="w-full pl-8 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                        </div>
-                      </div>
-                      <div className="w-36">
-                        <select
-                          value={editCustomTemplateCurrency}
-                          onChange={(e) => setEditCustomTemplateCurrency(e.target.value)}
-                          className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none pr-8"
-                        >
-                          <option value="USD">USD · US Dollar</option>
-                          <option value="EUR">EUR · Euro</option>
-                          <option value="GBP">GBP · Pound</option>
-                          <option value="INR">INR · Indian Rupee</option>
-                          <option value="AUD">AUD · Australian Dollar</option>
-                          <option value="CAD">CAD · Canadian Dollar</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                
+               
               </div>
 
               {/* Measurement Fields */}
