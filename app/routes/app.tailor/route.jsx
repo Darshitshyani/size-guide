@@ -1084,60 +1084,6 @@ export default function CustomTailor() {
                     {duplicateNameError && <p className="mt-1 text-xs text-red-500">A template with this name already exists. Please choose a different name.</p>}
                 </div>
 
-                {/* Pricing Section */}
-                <div className="mb-6">
-                    <h2 className="text-sm font-semibold text-gray-900 mb-2">Pricing (optional)</h2>
-                    <p className="text-xs text-gray-500 mb-3">
-                        Set a base price for this custom order template. You can use it later when adding the custom order to cart.
-                    </p>
-                    <div className="flex gap-3 items-end">
-                        <div className="flex-1">
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Price</label>
-                            <div className="relative">
-                                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-xs text-gray-400 pointer-events-none">
-                                    {templateCurrency === "USD" && "$"}
-                                    {templateCurrency === "EUR" && "€"}
-                                    {templateCurrency === "GBP" && "£"}
-                                    {templateCurrency === "INR" && "₹"}
-                                    {templateCurrency === "AUD" && "A$"}
-                                    {templateCurrency === "CAD" && "C$"}
-                                </span>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={templatePrice}
-                                    onChange={(e) => setTemplatePrice(e.target.value)}
-                                    placeholder="0.00"
-                                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                />
-                            </div>
-                        </div>
-                        <div className="w-40">
-                            <label className="block text-xs font-medium text-gray-700 mb-1">Currency</label>
-                            <div className="relative">
-                                <select
-                                    value={templateCurrency}
-                                    onChange={(e) => setTemplateCurrency(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer appearance-none pr-8"
-                                >
-                                    <option value="USD">USD · US Dollar</option>
-                                    <option value="EUR">EUR · Euro</option>
-                                    <option value="GBP">GBP · Pound</option>
-                                    <option value="INR">INR · Indian Rupee</option>
-                                    <option value="AUD">AUD · Australian Dollar</option>
-                                    <option value="CAD">CAD · Canadian Dollar</option>
-                                </select>
-                                <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-gray-400">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 {/* Tailor Presets */}
                 <div className="mb-6">
                     <h2 className="text-sm font-semibold text-gray-900 mb-3">Tailor Presets</h2>
