@@ -17,5 +17,43 @@
       "error": "No size chart available for this product.",
       "close": "Close"
     }
+  },
+  "customOrder": {
+    "button": {
+      "text": "Custom Order"
+    },
+    "modal": {
+      "title": "Custom Measurements",
+      "loading": "Loading custom order form...",
+      "error": "No custom order template available for this product.",
+      "close": "Close",
+      "howToMeasure": "How to Measure",
+      "expectedRange": "Expected range",
+      "enterMeasurement": "Enter your measurement",
+      "enterValue": "Enter value",
+      "additionalOptions": "Additional Options",
+      "customizePreferences": "Customize your order preferences",
+      "fitPreference": "Fit Preference",
+      "stitchingNotes": "Stitching Notes",
+      "stitchingNotesPlaceholder": "Add any specific instructions for the tailor...",
+      "collarStyle": "Collar Style",
+      "clear": "Clear",
+      "reviewYourOrder": "Review Your Order",
+      "verifyDetails": "Please verify all details before adding to cart",
+      "measurements": "Measurements",
+      "addValue": "+ Add value",
+      "notSelected": "Not selected",
+      "none": "None",
+      "editOptions": "Edit Options",
+      "back": "Back",
+      "saveAndContinue": "Save & Continue",
+      "reviewOrder": "Review Order",
+      "confirmAndAddToCart": "Confirm & Add to Cart",
+      "step": "Step",
+      "of": "of",
+      "finalStep": "Final Step",
+      "options": "Options",
+      "review": "Review"
+    }
   }
 }
