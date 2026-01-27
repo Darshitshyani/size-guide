@@ -5,9 +5,13 @@
 
 <style>
   .size-chart-button-wrapper {
-    display: flex;
+    display: none; /* Hidden by default until template is verified */
     justify-content: {{ block.settings.button_alignment }};
     margin: 10px 0;
+  }
+
+  .size-chart-button-wrapper.has-template {
+    display: flex;
   }
 
   .size-chart-button {
@@ -933,6 +937,33 @@
       }
     }
 
+    // Check if template exists and show button
+    async function checkTemplateExists() {
+      try {
+        const apiUrl = `/apps/size-guide/api/storefront/size-chart?shop=${encodeURIComponent(shop)}&productId=${encodeURIComponent(productId)}`;
+        
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.hasTemplate) {
+          // Template exists - show the button
+          wrapper.classList.add('has-template');
+          templateData = data.template;
+          isLoaded = true;
+        }
+        // If no template, button stays hidden
+      } catch (error) {
+        console.error('Error checking size chart:', error);
+        // On error, keep button hidden
+      }
+    }
+
     // Fetch size chart data
     async function fetchSizeChart() {
       if (isLoaded && templateData) {
@@ -967,6 +998,9 @@
         renderError('Failed to load size chart. Please try again.');
       }
     }
+
+    // Check template on page load
+    checkTemplateExists();
 
     // Open modal
     function openModal() {
