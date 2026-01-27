@@ -20,7 +20,7 @@
     color: {{ block.settings.text_color }};
     background-color: {{ block.settings.background_color }};
     border: none;
-    border-radius: {{ block.settings.border_radius }}px;
+    border-radius: 6px;
     cursor: pointer;
     transition: opacity 0.2s ease, transform 0.1s ease;
   }
@@ -280,11 +280,13 @@
     line-height: 1.5;
   }
 
-  /* Table Styles */
+  /* ==========================================
+     TABLE DESIGN STYLES
+     ========================================== */
+
+  /* Base Table Styles */
   .size-chart-table-wrapper {
     overflow-x: auto;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
   }
 
   .size-chart-table {
@@ -297,48 +299,262 @@
   .size-chart-table td {
     padding: 14px 20px;
     text-align: left;
-    border-bottom: 1px solid #e5e7eb;
-  }
-
-  .size-chart-table th {
-    background: #f9fafb;
-    font-weight: 600;
-    color: #374151;
-    white-space: nowrap;
-    font-size: 14px;
-  }
-
-  .size-chart-table th:first-child {
-    border-top-left-radius: 8px;
-  }
-
-  .size-chart-table th:last-child {
-    border-top-right-radius: 8px;
-  }
-
-  .size-chart-table tr:last-child td {
-    border-bottom: none;
-  }
-
-  .size-chart-table tr:last-child td:first-child {
-    border-bottom-left-radius: 8px;
-  }
-
-  .size-chart-table tr:last-child td:last-child {
-    border-bottom-right-radius: 8px;
-  }
-
-  .size-chart-table tbody tr:hover td {
-    background: #f9fafb;
-  }
-
-  .size-chart-table td {
-    color: #374151;
   }
 
   .size-chart-table td:first-child {
     font-weight: 500;
+  }
+
+  /* Design 1: Classic - Clean borders with gray header */
+  .table-design-classic .size-chart-table-wrapper {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+  }
+
+  .table-design-classic .size-chart-table th,
+  .table-design-classic .size-chart-table td {
+    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid #e5e7eb;
+  }
+
+  .table-design-classic .size-chart-table th:last-child,
+  .table-design-classic .size-chart-table td:last-child {
+    border-right: none;
+  }
+
+  .table-design-classic .size-chart-table th {
+    background: #f9fafb;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  .table-design-classic .size-chart-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .table-design-classic .size-chart-table tbody tr:hover td {
+    background: #f9fafb;
+  }
+
+  .table-design-classic .size-chart-table td {
+    color: #374151;
+  }
+
+  .table-design-classic .size-chart-table td:first-child {
     color: #111827;
+  }
+
+  /* Design 2: Minimal - Clean with subtle borders */
+  .table-design-minimal .size-chart-table-wrapper {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+  }
+
+  .table-design-minimal .size-chart-table th,
+  .table-design-minimal .size-chart-table td {
+    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid #e5e7eb;
+    padding: 16px 20px;
+  }
+
+  .table-design-minimal .size-chart-table th:last-child,
+  .table-design-minimal .size-chart-table td:last-child {
+    border-right: none;
+  }
+
+  .table-design-minimal .size-chart-table th {
+    background: #fafafa;
+    font-weight: 600;
+    color: #6b7280;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .table-design-minimal .size-chart-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .table-design-minimal .size-chart-table tbody tr:hover td {
+    background: #f9fafb;
+  }
+
+  .table-design-minimal .size-chart-table td {
+    color: #4b5563;
+  }
+
+  .table-design-minimal .size-chart-table td:first-child {
+    color: #111827;
+    font-weight: 600;
+  }
+
+  /* Design 3: Striped - Alternating row colors with borders */
+  .table-design-striped .size-chart-table-wrapper {
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .table-design-striped .size-chart-table th {
+    background: #1f2937;
+    font-weight: 600;
+    color: #ffffff;
+    padding: 16px 20px;
+    border-right: 1px solid #374151;
+    border-bottom: 1px solid #374151;
+  }
+
+  .table-design-striped .size-chart-table th:last-child {
+    border-right: none;
+  }
+
+  .table-design-striped .size-chart-table td {
+    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid #e5e7eb;
+    color: #374151;
+    padding: 14px 20px;
+  }
+
+  .table-design-striped .size-chart-table td:last-child {
+    border-right: none;
+  }
+
+  .table-design-striped .size-chart-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .table-design-striped .size-chart-table tbody tr:nth-child(odd) td {
+    background: #f9fafb;
+  }
+
+  .table-design-striped .size-chart-table tbody tr:nth-child(even) td {
+    background: #ffffff;
+  }
+
+  .table-design-striped .size-chart-table tbody tr:hover td {
+    background: #e5e7eb;
+  }
+
+  .table-design-striped .size-chart-table td:first-child {
+    color: #111827;
+    font-weight: 600;
+  }
+
+  /* Design 4: Modern - Soft cards, rounded header corners, subtle borders */
+  .table-design-modern .size-chart-table-wrapper {
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+    overflow: hidden;
+    background: #ffffff;
+  }
+
+  .table-design-modern .size-chart-table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .table-design-modern .size-chart-table th,
+  .table-design-modern .size-chart-table td {
+    border-bottom: 1px solid #e5e7eb;
+    border-right: 1px solid #e5e7eb;
+  }
+
+  .table-design-modern .size-chart-table th:last-child,
+  .table-design-modern .size-chart-table td:last-child {
+    border-right: none;
+  }
+
+  .table-design-modern .size-chart-table th {
+    /* Modern solid header (no gradient) */
+    background: #111827;
+    font-weight: 600;
+    color: #ffffff;
+    padding: 16px 20px;
+    position: relative;
+  }
+
+  .table-design-modern .size-chart-table thead tr th:first-child {
+    border-top-left-radius: 16px;
+  }
+
+  .table-design-modern .size-chart-table thead tr th:last-child {
+    border-top-right-radius: 16px;
+  }
+
+  .table-design-modern .size-chart-table td {
+    padding: 14px 20px;
+    color: #111827;
+    background: #ffffff;
+  }
+
+  .table-design-modern .size-chart-table tr:last-child td:first-child {
+    border-bottom-left-radius: 16px;
+  }
+
+  .table-design-modern .size-chart-table tr:last-child td:last-child {
+    border-bottom-right-radius: 16px;
+  }
+
+  .table-design-modern .size-chart-table tbody tr:nth-child(odd) td {
+    background: #f9fafb;
+  }
+
+  .table-design-modern .size-chart-table tbody tr:hover td {
+    background: #eef2ff;
+  }
+
+  .table-design-modern .size-chart-table td:first-child {
+    font-weight: 600;
+  }
+
+  /* Design 5: Elegant - Dark header, refined borders */
+  .table-design-elegant .size-chart-table-wrapper {
+    border: 2px solid #111827;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .table-design-elegant .size-chart-table th {
+    background: #111827;
+    font-weight: 500;
+    color: #ffffff;
+    padding: 16px 20px;
+    border-right: 1px solid #374151;
+    border-bottom: 2px solid #111827;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+  }
+
+  .table-design-elegant .size-chart-table th:last-child {
+    border-right: none;
+  }
+
+  .table-design-elegant .size-chart-table td {
+    border-bottom: 1px solid #d1d5db;
+    border-right: 1px solid #d1d5db;
+    color: #374151;
+    padding: 14px 20px;
+  }
+
+  .table-design-elegant .size-chart-table td:last-child {
+    border-right: none;
+  }
+
+  .table-design-elegant .size-chart-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .table-design-elegant .size-chart-table tbody tr:hover td {
+    background: #f3f4f6;
+  }
+
+  .table-design-elegant .size-chart-table td:first-child {
+    color: #111827;
+    font-weight: 600;
+    background: #f9fafb;
+    border-right: 1px solid #d1d5db;
   }
 
   /* How to Measure Tab */
@@ -469,6 +685,7 @@
     data-size-chart-trigger
     data-shop="{{ shop.permanent_domain }}"
     data-product-id="{{ product.id }}"
+    data-table-design="{{ block.settings.table_design }}"
     aria-label="{{ block.settings.button_text }}"
   >
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -533,6 +750,8 @@
 
     const shop = button.dataset.shop;
     const productId = button.dataset.productId;
+    const tableDesign = button.dataset.tableDesign || 'classic';
+    
     let isLoaded = false;
     let templateData = null;
     let currentUnit = 'in';
@@ -599,8 +818,8 @@
 
       let html = '';
 
-      // Details Tab
-      html += `<div class="size-chart-tab-content ${currentTab === 'details' ? 'active' : ''}" data-tab-content="details">`;
+      // Details Tab with table design class
+      html += `<div class="size-chart-tab-content table-design-${tableDesign} ${currentTab === 'details' ? 'active' : ''}" data-tab-content="details">`;
       
       if (columns && columns.length > 0) {
         html += '<div class="size-chart-table-wrapper">';
@@ -609,12 +828,14 @@
         // Header row
         html += '<thead><tr>';
         columns.forEach((col, index) => {
-          const label = col.label || col.name || col;
+          let label = col.label || col.name || col;
+          // Remove existing unit suffixes like (in), (cm), (In), (Cm) etc.
+          const cleanLabel = label.replace(/\s*\((in|cm|In|Cm)\)\s*$/i, '').trim();
           // First column is usually "Size" - no unit suffix
-          if (index === 0 && label.toLowerCase().includes('size')) {
-            html += `<th>${escapeHtml(label)}</th>`;
+          if (index === 0 && cleanLabel.toLowerCase().includes('size')) {
+            html += `<th>${escapeHtml(cleanLabel)}</th>`;
           } else {
-            html += `<th>${escapeHtml(label)} (${unitSuffix})</th>`;
+            html += `<th>${escapeHtml(cleanLabel)} (${unitSuffix})</th>`;
           }
         });
         html += '</tr></thead>';
@@ -795,6 +1016,18 @@
         closeModal();
       }
     });
+
+    // Theme editor: close modal when section/block is reloaded or settings change
+    function handleShopifyEditorEvent() {
+      if (modal.classList.contains('active')) {
+        closeModal();
+      }
+    }
+
+    document.addEventListener('shopify:section:load', handleShopifyEditorEvent);
+    document.addEventListener('shopify:section:select', handleShopifyEditorEvent);
+    document.addEventListener('shopify:block:select', handleShopifyEditorEvent);
+    document.addEventListener('shopify:block:deselect', handleShopifyEditorEvent);
   })();
 </script>
 
@@ -824,6 +1057,19 @@
       "default": "flex-start"
     },
     {
+      "type": "select",
+      "id": "table_design",
+      "label": "Table design",
+      "options": [
+        { "value": "classic", "label": "Classic" },
+        { "value": "minimal", "label": "Minimal" },
+        { "value": "striped", "label": "Striped" },
+        { "value": "modern", "label": "Modern" },
+        { "value": "elegant", "label": "Elegant" }
+      ],
+      "default": "classic"
+    },
+    {
       "type": "range",
       "id": "font_size",
       "label": "Font size",
@@ -844,16 +1090,6 @@
       "id": "background_color",
       "label": "Background color",
       "default": "#111111"
-    },
-    {
-      "type": "range",
-      "id": "border_radius",
-      "label": "Border radius",
-      "min": 0,
-      "max": 30,
-      "step": 2,
-      "default": 6,
-      "unit": "px"
     }
   ]
 }
