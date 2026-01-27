@@ -1,0 +1,8 @@
+api_version = "2024-10"
+name = "Table size chart"
+type = "theme"
+uid = "ce15af88-21b8-d4a4-6e1c-4909590cd0d43d74e2cd"
+
+[capabilities]
+ajax_api = true
+network_access = true

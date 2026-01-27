@@ -1,0 +1,511 @@
+{% comment %}
+  Size Chart Button Block
+  Displays a customizable button that opens a modal with the product's size chart
+{% endcomment %}
+
+<style>
+  .size-chart-button-wrapper {
+    display: flex;
+    justify-content: {{ block.settings.button_alignment }};
+    margin: 10px 0;
+  }
+
+  .size-chart-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    font-size: {{ block.settings.font_size }}px;
+    font-weight: 500;
+    color: {{ block.settings.text_color }};
+    background-color: {{ block.settings.background_color }};
+    border: none;
+    border-radius: {{ block.settings.border_radius }}px;
+    cursor: pointer;
+    transition: opacity 0.2s ease, transform 0.1s ease;
+  }
+
+  .size-chart-button:hover {
+    opacity: 0.85;
+  }
+
+  .size-chart-button:active {
+    transform: scale(0.98);
+  }
+
+  .size-chart-button svg {
+    width: {{ block.settings.font_size }}px;
+    height: {{ block.settings.font_size }}px;
+    flex-shrink: 0;
+  }
+
+  /* Modal Styles */
+  .size-chart-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+
+  .size-chart-modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .size-chart-modal {
+    background: #fff;
+    border-radius: 12px;
+    max-width: 90vw;
+    max-height: 90vh;
+    width: 800px;
+    overflow: hidden;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .size-chart-modal-overlay.active .size-chart-modal {
+    transform: scale(1);
+  }
+
+  .size-chart-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e5e5;
+    background: #f9fafb;
+  }
+
+  .size-chart-modal-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #111;
+  }
+
+  .size-chart-modal-close {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: #666;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+  }
+
+  .size-chart-modal-close:hover {
+    background: #e5e5e5;
+    color: #111;
+  }
+
+  .size-chart-modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .size-chart-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: #666;
+  }
+
+  .size-chart-loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid #e5e5e5;
+    border-top-color: #111;
+    border-radius: 50%;
+    animation: size-chart-spin 0.8s linear infinite;
+    margin-right: 12px;
+  }
+
+  @keyframes size-chart-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .size-chart-error {
+    text-align: center;
+    padding: 40px;
+    color: #dc2626;
+  }
+
+  .size-chart-error svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 12px;
+  }
+
+  /* Table Styles */
+  .size-chart-content {
+    width: 100%;
+  }
+
+  .size-chart-guide-section {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .size-chart-guide-image {
+    max-width: 300px;
+    border-radius: 8px;
+    border: 1px solid #e5e5e5;
+  }
+
+  .size-chart-guide-description {
+    flex: 1;
+    min-width: 200px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #444;
+  }
+
+  .size-chart-table-wrapper {
+    overflow-x: auto;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+  }
+
+  .size-chart-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .size-chart-table th,
+  .size-chart-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid #e5e5e5;
+  }
+
+  .size-chart-table th {
+    background: #f9fafb;
+    font-weight: 600;
+    color: #111;
+    white-space: nowrap;
+  }
+
+  .size-chart-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .size-chart-table tr:hover td {
+    background: #f9fafb;
+  }
+
+  .size-chart-table td {
+    color: #333;
+  }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .size-chart-modal {
+      width: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: 0;
+    }
+
+    .size-chart-guide-section {
+      flex-direction: column;
+    }
+
+    .size-chart-guide-image {
+      max-width: 100%;
+    }
+
+    .size-chart-table th,
+    .size-chart-table td {
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+  }
+</style>
+
+<div class="size-chart-button-wrapper" data-block-id="{{ block.id }}">
+  <button 
+    type="button" 
+    class="size-chart-button"
+    data-size-chart-trigger
+    data-shop="{{ shop.permanent_domain }}"
+    data-product-id="gid://shopify/Product/{{ product.id }}"
+    aria-label="{{ block.settings.button_text }}"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
+      <polyline points="7.5 19.79 7.5 14.6 3 12"/>
+      <polyline points="21 12 16.5 14.6 16.5 19.79"/>
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+      <line x1="12" y1="22.08" x2="12" y2="12"/>
+    </svg>
+    {{ block.settings.button_text }}
+  </button>
+</div>
+
+<!-- Modal Template -->
+<div class="size-chart-modal-overlay" data-size-chart-modal="{{ block.id }}">
+  <div class="size-chart-modal" role="dialog" aria-modal="true" aria-labelledby="size-chart-title-{{ block.id }}">
+    <div class="size-chart-modal-header">
+      <h2 class="size-chart-modal-title" id="size-chart-title-{{ block.id }}">Size Chart</h2>
+      <button type="button" class="size-chart-modal-close" data-size-chart-close aria-label="Close">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="size-chart-modal-body" data-size-chart-content>
+      <!-- Content will be loaded dynamically -->
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    const blockId = "{{ block.id }}";
+    const wrapper = document.querySelector(`[data-block-id="${blockId}"]`);
+    const button = wrapper?.querySelector('[data-size-chart-trigger]');
+    const modal = document.querySelector(`[data-size-chart-modal="${blockId}"]`);
+    const closeBtn = modal?.querySelector('[data-size-chart-close]');
+    const contentContainer = modal?.querySelector('[data-size-chart-content]');
+
+    if (!button || !modal) return;
+
+    const shop = button.dataset.shop;
+    const productId = button.dataset.productId;
+    let isLoaded = false;
+    let templateData = null;
+
+    // Render loading state
+    function renderLoading() {
+      contentContainer.innerHTML = `
+        <div class="size-chart-loading">
+          <div class="size-chart-loading-spinner"></div>
+          <span>Loading size chart...</span>
+        </div>
+      `;
+    }
+
+    // Render error state
+    function renderError(message) {
+      contentContainer.innerHTML = `
+        <div class="size-chart-error">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <p>${message || 'No size chart available for this product.'}</p>
+        </div>
+      `;
+    }
+
+    // Render table content
+    function renderContent(template) {
+      const { name, columns, rows, guideImage, measureDescription } = template;
+
+      let html = '<div class="size-chart-content">';
+
+      // Guide section (image and description)
+      if (guideImage || measureDescription) {
+        html += '<div class="size-chart-guide-section">';
+        if (guideImage) {
+          html += `<img src="${guideImage}" alt="Measurement guide" class="size-chart-guide-image" loading="lazy">`;
+        }
+        if (measureDescription) {
+          html += `<div class="size-chart-guide-description">${measureDescription}</div>`;
+        }
+        html += '</div>';
+      }
+
+      // Table
+      if (columns && columns.length > 0) {
+        html += '<div class="size-chart-table-wrapper">';
+        html += '<table class="size-chart-table">';
+        
+        // Header row
+        html += '<thead><tr>';
+        columns.forEach(col => {
+          html += `<th>${escapeHtml(col.label || col.name || col)}</th>`;
+        });
+        html += '</tr></thead>';
+
+        // Body rows
+        html += '<tbody>';
+        if (rows && rows.length > 0) {
+          rows.forEach(row => {
+            html += '<tr>';
+            columns.forEach(col => {
+              const key = col.key || col.name || col;
+              const value = row[key] ?? '';
+              html += `<td>${escapeHtml(String(value))}</td>`;
+            });
+            html += '</tr>';
+          });
+        }
+        html += '</tbody>';
+        html += '</table>';
+        html += '</div>';
+      }
+
+      html += '</div>';
+      contentContainer.innerHTML = html;
+    }
+
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Fetch size chart data
+    async function fetchSizeChart() {
+      if (isLoaded && templateData) {
+        renderContent(templateData);
+        return;
+      }
+
+      renderLoading();
+
+      try {
+        // Use Shopify's app proxy URL pattern: /apps/{subpath}/...
+        const apiUrl = `/apps/size-guide/api/storefront/size-chart?shop=${encodeURIComponent(shop)}&productId=${encodeURIComponent(productId)}`;
+        
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.hasTemplate) {
+          renderError(data.error || 'No size chart available for this product.');
+          return;
+        }
+
+        templateData = data.template;
+        isLoaded = true;
+        renderContent(templateData);
+      } catch (error) {
+        console.error('Error fetching size chart:', error);
+        renderError('Failed to load size chart. Please try again.');
+      }
+    }
+
+    // Open modal
+    function openModal() {
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+      fetchSizeChart();
+      
+      // Focus management for accessibility
+      closeBtn?.focus();
+    }
+
+    // Close modal
+    function closeModal() {
+      modal.classList.remove('active');
+      document.body.style.overflow = '';
+      button.focus();
+    }
+
+    // Event listeners
+    button.addEventListener('click', openModal);
+    closeBtn?.addEventListener('click', closeModal);
+
+    // Close on overlay click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeModal();
+      }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.classList.contains('active')) {
+        closeModal();
+      }
+    });
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Size Chart Button",
+  "target": "section",
+  "enabled_on": {
+    "templates": ["product"]
+  },
+  "settings": [
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Button text",
+      "default": "Size Guide"
+    },
+    {
+      "type": "select",
+      "id": "button_alignment",
+      "label": "Alignment",
+      "options": [
+        { "value": "flex-start", "label": "Left" },
+        { "value": "center", "label": "Center" },
+        { "value": "flex-end", "label": "Right" }
+      ],
+      "default": "flex-start"
+    },
+    {
+      "type": "range",
+      "id": "font_size",
+      "label": "Font size",
+      "min": 10,
+      "max": 24,
+      "step": 1,
+      "default": 14,
+      "unit": "px"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "background_color",
+      "label": "Background color",
+      "default": "#111111"
+    },
+    {
+      "type": "range",
+      "id": "border_radius",
+      "label": "Border radius",
+      "min": 0,
+      "max": 30,
+      "step": 2,
+      "default": 6,
+      "unit": "px"
+    }
+  ]
+}
+{% endschema %}

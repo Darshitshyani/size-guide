@@ -1,0 +1,21 @@
+{
+  "ratings": {
+    "stars": {
+      "label": "Ratings"
+    },
+    "home": {
+      "recommendationText": "Recommended Product!"
+    }
+  },
+  "sizeChart": {
+    "button": {
+      "text": "Size Guide",
+      "modalTitle": "Size Chart"
+    },
+    "modal": {
+      "loading": "Loading size chart...",
+      "error": "No size chart available for this product.",
+      "close": "Close"
+    }
+  }
+}

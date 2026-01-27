@@ -29,3 +29,8 @@ redirect_urls = [
   "https://size-guide.fly.dev/auth/shopify/callback",
   "https://size-guide.fly.dev/api/auth/callback"
 ]
+
+[app_proxy]
+url = "https://size-guide.fly.dev"
+subpath = "size-guide"
+prefix = "apps"
