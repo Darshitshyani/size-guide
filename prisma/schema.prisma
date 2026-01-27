@@ -77,6 +77,8 @@ model TailorTemplate {
   collarOptions  String? // JSON array for collar settings (name, image)
   enableStitchingNotes Boolean @default(false)
   customFeatures String? // JSON array for custom advanced features
+  price        Float?   // Optional base price for custom order
+  currency     String?  @default("USD") // Currency code for price
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
