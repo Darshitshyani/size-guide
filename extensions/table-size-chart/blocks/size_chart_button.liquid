@@ -51,9 +51,9 @@
     width: 100vw !important;
     height: 100vh !important;
     margin: 0 !important;
-    background-color: rgba(0, 0, 0, 0.65) !important;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    background-color: rgba(0, 0, 0, 0.5) !important;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
     display: none;
     align-items: center;
     justify-content: center;
@@ -75,16 +75,16 @@
   .size-chart-modal {
     position: relative;
     background: #ffffff !important;
-    border-radius: 16px;
+    border-radius: 12px;
     max-width: 90vw;
-    max-height: 85vh;
-    width: 700px;
+    max-height: 90vh;
+    width: 800px;
     overflow: hidden;
     transform: scale(0.95);
     transition: transform 0.2s ease;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     z-index: 2147483647;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
     font-size: 14px;
@@ -96,6 +96,7 @@
     transform: scale(1);
   }
 
+  /* Header */
   .size-chart-modal-header {
     display: flex;
     align-items: center;
@@ -104,23 +105,62 @@
     border-bottom: 1px solid #e5e7eb;
     background: #ffffff;
     flex-shrink: 0;
+    gap: 16px;
   }
 
   .size-chart-modal-title {
     margin: 0;
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 600;
     color: #111827;
     line-height: 1.4;
+    flex: 1;
+  }
+
+  .size-chart-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Unit Toggle */
+  .size-chart-unit-toggle {
+    display: flex;
+    background: #f3f4f6;
+    border-radius: 8px;
+    padding: 4px;
+    gap: 2px;
+  }
+
+  .size-chart-unit-btn {
+    padding: 6px 16px;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    font-family: inherit;
+  }
+
+  .size-chart-unit-btn:hover {
+    color: #374151;
+  }
+
+  .size-chart-unit-btn.active {
+    background: #1f2937;
+    color: #ffffff;
   }
 
   .size-chart-modal-close {
-    background: #f3f4f6;
+    background: transparent;
     border: none;
     padding: 8px;
     cursor: pointer;
-    color: #6b7280;
-    border-radius: 8px;
+    color: #9ca3af;
+    border-radius: 6px;
     transition: all 0.15s ease;
     display: flex;
     align-items: center;
@@ -128,8 +168,8 @@
   }
 
   .size-chart-modal-close:hover {
-    background: #e5e7eb;
-    color: #111827;
+    background: #f3f4f6;
+    color: #374151;
   }
 
   .size-chart-modal-close svg {
@@ -137,14 +177,56 @@
     height: 20px;
   }
 
+  /* Tabs */
+  .size-chart-tabs {
+    display: flex;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 0 24px;
+    background: #ffffff;
+  }
+
+  .size-chart-tab {
+    padding: 14px 4px;
+    margin-right: 24px;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s ease;
+    font-family: inherit;
+  }
+
+  .size-chart-tab:hover {
+    color: #374151;
+  }
+
+  .size-chart-tab.active {
+    color: #111827;
+    border-bottom-color: #111827;
+  }
+
+  /* Modal Body */
   .size-chart-modal-body {
-    padding: 24px;
+    padding: 0;
     overflow-y: auto;
     flex: 1;
     background: #ffffff;
-    min-height: 200px;
   }
 
+  .size-chart-tab-content {
+    display: none;
+    padding: 24px;
+  }
+
+  .size-chart-tab-content.active {
+    display: block;
+  }
+
+  /* Loading & Error States */
   .size-chart-loading {
     display: flex;
     flex-direction: column;
@@ -184,8 +266,8 @@
   }
 
   .size-chart-error svg {
-    width: 56px;
-    height: 56px;
+    width: 48px;
+    height: 48px;
     margin-bottom: 16px;
     color: #fca5a5;
   }
@@ -199,40 +281,10 @@
   }
 
   /* Table Styles */
-  .size-chart-content {
-    width: 100%;
-  }
-
-  .size-chart-guide-section {
-    display: flex;
-    gap: 24px;
-    margin-bottom: 28px;
-    flex-wrap: wrap;
-    padding: 20px;
-    background: #f9fafb;
-    border-radius: 12px;
-  }
-
-  .size-chart-guide-image {
-    max-width: 280px;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-
-  .size-chart-guide-description {
-    flex: 1;
-    min-width: 200px;
-    font-size: 14px;
-    line-height: 1.7;
-    color: #4b5563;
-  }
-
   .size-chart-table-wrapper {
     overflow-x: auto;
     border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
   }
 
   .size-chart-table {
@@ -243,7 +295,7 @@
 
   .size-chart-table th,
   .size-chart-table td {
-    padding: 14px 18px;
+    padding: 14px 20px;
     text-align: left;
     border-bottom: 1px solid #e5e7eb;
   }
@@ -251,15 +303,29 @@
   .size-chart-table th {
     background: #f9fafb;
     font-weight: 600;
-    color: #111827;
+    color: #374151;
     white-space: nowrap;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.025em;
+    font-size: 14px;
+  }
+
+  .size-chart-table th:first-child {
+    border-top-left-radius: 8px;
+  }
+
+  .size-chart-table th:last-child {
+    border-top-right-radius: 8px;
   }
 
   .size-chart-table tr:last-child td {
     border-bottom: none;
+  }
+
+  .size-chart-table tr:last-child td:first-child {
+    border-bottom-left-radius: 8px;
+  }
+
+  .size-chart-table tr:last-child td:last-child {
+    border-bottom-right-radius: 8px;
   }
 
   .size-chart-table tbody tr:hover td {
@@ -268,6 +334,63 @@
 
   .size-chart-table td {
     color: #374151;
+  }
+
+  .size-chart-table td:first-child {
+    font-weight: 500;
+    color: #111827;
+  }
+
+  /* How to Measure Tab */
+  .size-chart-measure-content {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  .size-chart-measure-image {
+    flex: 0 0 auto;
+    max-width: 300px;
+  }
+
+  .size-chart-measure-image img {
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+  }
+
+  .size-chart-measure-description {
+    flex: 1;
+    min-width: 250px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #4b5563;
+  }
+
+  .size-chart-measure-description h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #111827;
+    margin: 0 0 12px 0;
+  }
+
+  .size-chart-measure-description p {
+    margin: 0 0 16px 0;
+  }
+
+  .size-chart-measure-description ul {
+    margin: 0;
+    padding-left: 20px;
+  }
+
+  .size-chart-measure-description li {
+    margin-bottom: 8px;
+  }
+
+  .size-chart-no-content {
+    text-align: center;
+    padding: 40px;
+    color: #6b7280;
   }
 
   /* Responsive */
@@ -285,25 +408,51 @@
     }
 
     .size-chart-modal-header {
-      padding: 16px 20px;
+      padding: 16px 16px;
+      flex-wrap: wrap;
     }
 
-    .size-chart-modal-body {
-      padding: 20px;
+    .size-chart-modal-title {
+      font-size: 16px;
+      order: 1;
+      flex: 0 0 auto;
     }
 
-    .size-chart-guide-section {
-      flex-direction: column;
+    .size-chart-header-actions {
+      order: 2;
     }
 
-    .size-chart-guide-image {
-      max-width: 100%;
+    .size-chart-tabs {
+      padding: 0 16px;
+    }
+
+    .size-chart-tab {
+      padding: 12px 4px;
+      margin-right: 16px;
+      font-size: 13px;
+    }
+
+    .size-chart-tab-content {
+      padding: 16px;
     }
 
     .size-chart-table th,
     .size-chart-table td {
-      padding: 10px 12px;
+      padding: 12px 14px;
       font-size: 13px;
+    }
+
+    .size-chart-unit-btn {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    .size-chart-measure-content {
+      flex-direction: column;
+    }
+
+    .size-chart-measure-image {
+      max-width: 100%;
     }
 
     .size-chart-error,
@@ -319,7 +468,7 @@
     class="size-chart-button"
     data-size-chart-trigger
     data-shop="{{ shop.permanent_domain }}"
-    data-product-id="gid://shopify/Product/{{ product.id }}"
+    data-product-id="{{ product.id }}"
     aria-label="{{ block.settings.button_text }}"
   >
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -338,13 +487,23 @@
 <div class="size-chart-modal-overlay" data-size-chart-modal="{{ block.id }}">
   <div class="size-chart-modal" role="dialog" aria-modal="true" aria-labelledby="size-chart-title-{{ block.id }}">
     <div class="size-chart-modal-header">
-      <h2 class="size-chart-modal-title" id="size-chart-title-{{ block.id }}">Size Chart</h2>
-      <button type="button" class="size-chart-modal-close" data-size-chart-close aria-label="Close">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
+      <h2 class="size-chart-modal-title" id="size-chart-title-{{ block.id }}" data-size-chart-title>Size Chart</h2>
+      <div class="size-chart-header-actions">
+        <div class="size-chart-unit-toggle" data-unit-toggle>
+          <button type="button" class="size-chart-unit-btn active" data-unit="in">In</button>
+          <button type="button" class="size-chart-unit-btn" data-unit="cm">cm</button>
+        </div>
+        <button type="button" class="size-chart-modal-close" data-size-chart-close aria-label="Close">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="size-chart-tabs" data-tabs-container>
+      <button type="button" class="size-chart-tab active" data-tab="details">Details</button>
+      <button type="button" class="size-chart-tab" data-tab="measure">How to Measure</button>
     </div>
     <div class="size-chart-modal-body" data-size-chart-content>
       <!-- Content will be loaded dynamically -->
@@ -368,18 +527,41 @@
 
     const closeBtn = modal.querySelector('[data-size-chart-close]');
     const contentContainer = modal.querySelector('[data-size-chart-content]');
+    const titleElement = modal.querySelector('[data-size-chart-title]');
+    const tabsContainer = modal.querySelector('[data-tabs-container]');
+    const unitToggle = modal.querySelector('[data-unit-toggle]');
 
     const shop = button.dataset.shop;
     const productId = button.dataset.productId;
     let isLoaded = false;
     let templateData = null;
+    let currentUnit = 'in';
+    let currentTab = 'details';
+
+    // Convert inches to cm
+    function inToCm(value) {
+      const num = parseFloat(value);
+      if (isNaN(num)) return value;
+      return (num * 2.54).toFixed(1);
+    }
+
+    // Get display value based on unit
+    function getDisplayValue(value, unit) {
+      if (value === '-' || value === '' || value === null || value === undefined) return '-';
+      if (unit === 'cm') {
+        return inToCm(value);
+      }
+      return value;
+    }
 
     // Render loading state
     function renderLoading() {
       contentContainer.innerHTML = `
-        <div class="size-chart-loading">
-          <div class="size-chart-loading-spinner"></div>
-          <span>Loading size chart...</span>
+        <div class="size-chart-tab-content active">
+          <div class="size-chart-loading">
+            <div class="size-chart-loading-spinner"></div>
+            <span>Loading size chart...</span>
+          </div>
         </div>
       `;
     }
@@ -387,44 +569,53 @@
     // Render error state
     function renderError(message) {
       contentContainer.innerHTML = `
-        <div class="size-chart-error">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          <p>${message || 'No size chart available for this product.'}</p>
+        <div class="size-chart-tab-content active">
+          <div class="size-chart-error">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p>${message || 'No size chart available for this product.'}</p>
+          </div>
         </div>
       `;
     }
 
+    // Get unit suffix
+    function getUnitSuffix(unit) {
+      return unit === 'cm' ? 'cm' : 'In';
+    }
+
     // Render table content
-    function renderContent(template) {
+    function renderContent(template, unit = 'in') {
       const { name, columns, rows, guideImage, measureDescription } = template;
+      const unitSuffix = getUnitSuffix(unit);
 
-      let html = '<div class="size-chart-content">';
-
-      // Guide section (image and description)
-      if (guideImage || measureDescription) {
-        html += '<div class="size-chart-guide-section">';
-        if (guideImage) {
-          html += `<img src="${guideImage}" alt="Measurement guide" class="size-chart-guide-image" loading="lazy">`;
-        }
-        if (measureDescription) {
-          html += `<div class="size-chart-guide-description">${measureDescription}</div>`;
-        }
-        html += '</div>';
+      // Update title
+      if (titleElement && name) {
+        titleElement.textContent = name;
       }
 
-      // Table
+      let html = '';
+
+      // Details Tab
+      html += `<div class="size-chart-tab-content ${currentTab === 'details' ? 'active' : ''}" data-tab-content="details">`;
+      
       if (columns && columns.length > 0) {
         html += '<div class="size-chart-table-wrapper">';
         html += '<table class="size-chart-table">';
         
         // Header row
         html += '<thead><tr>';
-        columns.forEach(col => {
-          html += `<th>${escapeHtml(col.label || col.name || col)}</th>`;
+        columns.forEach((col, index) => {
+          const label = col.label || col.name || col;
+          // First column is usually "Size" - no unit suffix
+          if (index === 0 && label.toLowerCase().includes('size')) {
+            html += `<th>${escapeHtml(label)}</th>`;
+          } else {
+            html += `<th>${escapeHtml(label)} (${unitSuffix})</th>`;
+          }
         });
         html += '</tr></thead>';
 
@@ -433,10 +624,16 @@
         if (rows && rows.length > 0) {
           rows.forEach(row => {
             html += '<tr>';
-            columns.forEach(col => {
+            columns.forEach((col, index) => {
               const key = col.key || col.name || col;
-              const value = row[key] ?? '';
-              html += `<td>${escapeHtml(String(value))}</td>`;
+              let value = row[key] ?? '-';
+              // Don't convert the first column (Size)
+              const colLabel = col.label || col.name || col;
+              if (index === 0 && colLabel.toLowerCase().includes('size')) {
+                html += `<td>${escapeHtml(String(value))}</td>`;
+              } else {
+                html += `<td>${escapeHtml(String(getDisplayValue(value, unit)))}</td>`;
+              }
             });
             html += '</tr>';
           });
@@ -444,9 +641,37 @@
         html += '</tbody>';
         html += '</table>';
         html += '</div>';
+      } else {
+        html += '<div class="size-chart-no-content">No size data available.</div>';
       }
-
+      
       html += '</div>';
+
+      // How to Measure Tab
+      html += `<div class="size-chart-tab-content ${currentTab === 'measure' ? 'active' : ''}" data-tab-content="measure">`;
+      
+      if (guideImage || measureDescription) {
+        html += '<div class="size-chart-measure-content">';
+        
+        if (guideImage) {
+          html += `
+            <div class="size-chart-measure-image">
+              <img src="${guideImage}" alt="How to measure" loading="lazy">
+            </div>
+          `;
+        }
+        
+        if (measureDescription) {
+          html += `<div class="size-chart-measure-description">${measureDescription}</div>`;
+        }
+        
+        html += '</div>';
+      } else {
+        html += '<div class="size-chart-no-content">No measurement guide available for this product.</div>';
+      }
+      
+      html += '</div>';
+
       contentContainer.innerHTML = html;
     }
 
@@ -457,17 +682,46 @@
       return div.innerHTML;
     }
 
+    // Handle tab switching
+    function switchTab(tabName) {
+      currentTab = tabName;
+      
+      // Update tab buttons
+      tabsContainer.querySelectorAll('.size-chart-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+      });
+      
+      // Update tab content
+      contentContainer.querySelectorAll('[data-tab-content]').forEach(content => {
+        content.classList.toggle('active', content.dataset.tabContent === tabName);
+      });
+    }
+
+    // Handle unit switching
+    function switchUnit(unit) {
+      currentUnit = unit;
+      
+      // Update unit buttons
+      unitToggle.querySelectorAll('.size-chart-unit-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.unit === unit);
+      });
+      
+      // Re-render content with new unit
+      if (templateData) {
+        renderContent(templateData, unit);
+      }
+    }
+
     // Fetch size chart data
     async function fetchSizeChart() {
       if (isLoaded && templateData) {
-        renderContent(templateData);
+        renderContent(templateData, currentUnit);
         return;
       }
 
       renderLoading();
 
       try {
-        // Use Shopify's app proxy URL pattern: /apps/{subpath}/...
         const apiUrl = `/apps/size-guide/api/storefront/size-chart?shop=${encodeURIComponent(shop)}&productId=${encodeURIComponent(productId)}`;
         
         const response = await fetch(apiUrl, {
@@ -486,7 +740,7 @@
 
         templateData = data.template;
         isLoaded = true;
-        renderContent(templateData);
+        renderContent(templateData, currentUnit);
       } catch (error) {
         console.error('Error fetching size chart:', error);
         renderError('Failed to load size chart. Please try again.');
@@ -498,8 +752,6 @@
       modal.classList.add('active');
       document.body.style.overflow = 'hidden';
       fetchSizeChart();
-      
-      // Focus management for accessibility
       closeBtn?.focus();
     }
 
@@ -513,6 +765,22 @@
     // Event listeners
     button.addEventListener('click', openModal);
     closeBtn?.addEventListener('click', closeModal);
+
+    // Tab switching
+    tabsContainer.addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-tab]');
+      if (tab) {
+        switchTab(tab.dataset.tab);
+      }
+    });
+
+    // Unit switching
+    unitToggle.addEventListener('click', (e) => {
+      const unitBtn = e.target.closest('[data-unit]');
+      if (unitBtn) {
+        switchUnit(unitBtn.dataset.unit);
+      }
+    });
 
     // Close on overlay click
     modal.addEventListener('click', (e) => {

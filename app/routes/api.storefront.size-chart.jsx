@@ -44,6 +44,7 @@ export const loader = async ({ request }) => {
     });
 
     if (!assignment || !assignment.template) {
+      console.log(`No assignment found for shop: ${shop}, productId: ${productId}`);
       return data(
         { error: "No size chart template assigned to this product", hasTemplate: false },
         { status: 404, headers }
@@ -51,14 +52,7 @@ export const loader = async ({ request }) => {
     }
 
     const template = assignment.template;
-
-    // Only return active templates
-    if (!template.isActive) {
-      return data(
-        { error: "Size chart template is not active", hasTemplate: false },
-        { status: 404, headers }
-      );
-    }
+    console.log(`Found template: ${template.name}, isActive: ${template.isActive}`);
 
     return data(
       {
