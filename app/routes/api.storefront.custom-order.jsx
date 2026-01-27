@@ -74,6 +74,8 @@ export const loader = async ({ request }) => {
           enableStitchingNotes: template.enableStitchingNotes,
           customFeatures: customFeatures,
           isActive: template.isActive,
+          price: template.price,
+          currency: template.currency || "USD",
         },
       },
       { headers }
