@@ -98,3 +98,36 @@ model TailorTemplateAssignment {
   @@index([shop])
   @@index([templateId])
 }
+
+// Size Chart Button Appearance Settings
+model SizeChartSettings {
+  id              String   @id @default(uuid())
+  shop            String   @unique // One settings per shop
+  
+  // Button Settings
+  buttonText      String   @default("Size Guide")
+  buttonIcon      String   @default("ruler") // ruler, shirt, grid, info, hanger, none
+  buttonAlignment String   @default("left") // left, center, right
+  buttonTextColor String   @default("#ffffff")
+  buttonBgColor   String   @default("#111111")
+  buttonBorderRadius Int   @default(6)
+  buttonPaddingTop    Int  @default(10)
+  buttonPaddingBottom Int  @default(10)
+  buttonPaddingLeft   Int  @default(20)
+  buttonPaddingRight  Int  @default(20)
+  buttonBorderStyle   String @default("none") // none, solid
+  buttonBorderColor   String @default("#111111")
+  buttonBorderWidth   Int    @default(1)
+  buttonBorderTop     Boolean @default(true)
+  buttonBorderRight   Boolean @default(true)
+  buttonBorderBottom  Boolean @default(true)
+  buttonBorderLeft    Boolean @default(true)
+  
+  // Table Settings
+  tableDesign     String   @default("classic") // classic, minimal, striped, modern, elegant
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shop])
+}

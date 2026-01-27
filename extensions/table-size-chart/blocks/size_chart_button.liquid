@@ -1,12 +1,12 @@
 {% comment %}
   Size Chart Button Block
   Displays a customizable button that opens a modal with the product's size chart
+  Settings are fetched dynamically from the app
 {% endcomment %}
 
 <style>
   .size-chart-button-wrapper {
-    display: none; /* Hidden by default until template is verified */
-    justify-content: {{ block.settings.button_alignment }};
+    display: none;
     margin: 10px 0;
   }
 
@@ -18,15 +18,11 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 20px;
-    font-size: {{ block.settings.font_size }}px;
-    font-weight: 500;
-    color: {{ block.settings.text_color }};
-    background-color: {{ block.settings.background_color }};
-    border: none;
-    border-radius: 6px;
     cursor: pointer;
     transition: opacity 0.2s ease, transform 0.1s ease;
+    font-weight: 500;
+    font-size: 14px;
+    border-radius: 0;
   }
 
   .size-chart-button:hover {
@@ -38,8 +34,8 @@
   }
 
   .size-chart-button svg {
-    width: {{ block.settings.font_size }}px;
-    height: {{ block.settings.font_size }}px;
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
   }
 
@@ -348,43 +344,41 @@
     color: #111827;
   }
 
-  /* Design 2: Minimal - Clean with subtle borders */
+  /* Design 2: Minimal - Clean with gray header */
   .table-design-minimal .size-chart-table-wrapper {
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
+    border-radius: 6px;
+    overflow: hidden;
   }
 
-  .table-design-minimal .size-chart-table th,
-  .table-design-minimal .size-chart-table td {
-    border-bottom: 1px solid #e5e7eb;
-    border-right: 1px solid #e5e7eb;
-    padding: 16px 20px;
-  }
-
-  .table-design-minimal .size-chart-table th:last-child,
-  .table-design-minimal .size-chart-table td:last-child {
-    border-right: none;
+  .table-design-minimal .size-chart-table {
+    background: #ffffff;
   }
 
   .table-design-minimal .size-chart-table th {
-    background: #fafafa;
+    background: #cccccc;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 12px 18px;
     font-weight: 600;
-    color: #6b7280;
+    color: #111827;
     font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+  }
+
+  .table-design-minimal .size-chart-table td {
+    border-bottom: 1px solid #f3f4f6;
+    padding: 12px 18px;
+    color: #4b5563;
   }
 
   .table-design-minimal .size-chart-table tr:last-child td {
     border-bottom: none;
   }
 
-  .table-design-minimal .size-chart-table tbody tr:hover td {
-    background: #f9fafb;
+  .table-design-minimal .size-chart-table tbody tr:nth-child(even) td {
+    background: #fcfcfd;
   }
 
-  .table-design-minimal .size-chart-table td {
-    color: #4b5563;
+  .table-design-minimal .size-chart-table tbody tr:hover td {
+    background: #f3f4f6;
   }
 
   .table-design-minimal .size-chart-table td:first-child {
@@ -689,18 +683,11 @@
     data-size-chart-trigger
     data-shop="{{ shop.permanent_domain }}"
     data-product-id="{{ product.id }}"
-    data-table-design="{{ block.settings.table_design }}"
-    aria-label="{{ block.settings.button_text }}"
+    aria-label="Size Guide"
   >
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-      <polyline points="7.5 4.21 12 6.81 16.5 4.21"/>
-      <polyline points="7.5 19.79 7.5 14.6 3 12"/>
-      <polyline points="21 12 16.5 14.6 16.5 19.79"/>
-      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-      <line x1="12" y1="22.08" x2="12" y2="12"/>
-    </svg>
-    {{ block.settings.button_text }}
+    <!-- Icon and text will be inserted dynamically -->
+    <span data-button-icon></span>
+    <span data-button-text>Size Guide</span>
   </button>
 </div>
 
@@ -751,15 +738,126 @@
     const titleElement = modal.querySelector('[data-size-chart-title]');
     const tabsContainer = modal.querySelector('[data-tabs-container]');
     const unitToggle = modal.querySelector('[data-unit-toggle]');
+    const buttonIconSpan = button.querySelector('[data-button-icon]');
+    const buttonTextSpan = button.querySelector('[data-button-text]');
 
     const shop = button.dataset.shop;
     const productId = button.dataset.productId;
-    const tableDesign = button.dataset.tableDesign || 'classic';
+
+    // Theme settings (override app layout for basic positioning/spacing)
+    const themeSettings = {
+      alignment: "{{ block.settings.button_alignment | default: 'app' }}",
+      marginTop: "{{ block.settings.button_margin_top | default: '' }}",
+      marginBottom: "{{ block.settings.button_margin_bottom | default: '' }}",
+      paddingVertical: "{{ block.settings.button_padding_vertical | default: '' }}",
+      paddingHorizontal: "{{ block.settings.button_padding_horizontal | default: '' }}",
+    };
     
     let isLoaded = false;
     let templateData = null;
+    let appSettings = null;
+    let settingsPromise = null;
     let currentUnit = 'in';
     let currentTab = 'details';
+
+    // Icon SVGs
+    const icons = {
+      ruler: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/>
+        <path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/>
+      </svg>`,
+      shirt: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23Z"/>
+      </svg>`,
+      grid: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="18" height="18" x="3" y="3" rx="2"/>
+        <path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/>
+      </svg>`,
+      info: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 16v-4"/><path d="M12 8h.01"/>
+      </svg>`,
+      hanger: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 6a2 2 0 1 0-4 0c0 1.1.9 2 2 2"/>
+        <path d="M12 8v1"/><path d="M3 18l9-6 9 6"/><line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>`,
+      none: ''
+    };
+
+    // Apply settings to button
+    function applyButtonSettings(settings) {
+      // Text
+      buttonTextSpan.textContent = settings.buttonText || 'Size Guide';
+      button.setAttribute('aria-label', settings.buttonText || 'Size Guide');
+
+      // Icon
+      buttonIconSpan.innerHTML = icons[settings.buttonIcon] || icons.ruler;
+
+      // Alignment (theme override > app setting)
+      const appAlignment = settings.buttonAlignment || 'left';
+      const themeAlignment = (themeSettings.alignment || 'app');
+      const finalAlignmentValue = themeAlignment !== 'app' ? themeAlignment : appAlignment;
+      const alignment = finalAlignmentValue === 'center' ? 'center' : 
+                        finalAlignmentValue === 'right' ? 'flex-end' : 'flex-start';
+      wrapper.style.display = 'flex';
+      wrapper.style.justifyContent = alignment;
+
+      // Margin from theme (top/bottom)
+      const marginTopNum = parseInt(themeSettings.marginTop, 10);
+      const marginBottomNum = parseInt(themeSettings.marginBottom, 10);
+      wrapper.style.marginTop = isNaN(marginTopNum) ? '10px' : marginTopNum + 'px';
+      wrapper.style.marginBottom = isNaN(marginBottomNum) ? '10px' : marginBottomNum + 'px';
+
+      // Colors & radius from app
+      button.style.color = settings.buttonTextColor || '#ffffff';
+      button.style.backgroundColor = settings.buttonBgColor || '#111111';
+      button.style.borderRadius = `${settings.buttonBorderRadius !== undefined ? settings.buttonBorderRadius : 6}px`;
+
+      // Padding (theme vertical/horizontal override > app top/right/bottom/left)
+      const padV = parseInt(themeSettings.paddingVertical, 10);
+      const padH = parseInt(themeSettings.paddingHorizontal, 10);
+      const paddingTop = !isNaN(padV) ? padV : (settings.buttonPaddingTop || 10);
+      const paddingBottom = !isNaN(padV) ? padV : (settings.buttonPaddingBottom || 10);
+      const paddingLeft = !isNaN(padH) ? padH : (settings.buttonPaddingLeft || 20);
+      const paddingRight = !isNaN(padH) ? padH : (settings.buttonPaddingRight || 20);
+      button.style.padding = `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px`;
+      
+      // Border style with per-side control
+      button.style.borderStyle = 'none';
+      button.style.borderWidth = '0';
+
+      if (settings.buttonBorderStyle && settings.buttonBorderStyle !== 'none') {
+        var width = settings.buttonBorderWidth || 1;
+        var color = settings.buttonBorderColor || '#111111';
+        var style = settings.buttonBorderStyle || 'solid';
+
+        button.style.borderStyle = style;
+        button.style.borderColor = color;
+        button.style.borderTopWidth = settings.buttonBorderTop === false ? '0' : width + 'px';
+        button.style.borderRightWidth = settings.buttonBorderRight === false ? '0' : width + 'px';
+        button.style.borderBottomWidth = settings.buttonBorderBottom === false ? '0' : width + 'px';
+        button.style.borderLeftWidth = settings.buttonBorderLeft === false ? '0' : width + 'px';
+      }
+    }
+
+    // Fetch app settings
+    async function fetchAppSettings() {
+      try {
+        const apiUrl = `/apps/size-guide/api/storefront/settings?shop=${encodeURIComponent(shop)}`;
+        const response = await fetch(apiUrl);
+        const data = await response.json();
+        
+        if (data.settings) {
+          appSettings = data.settings;
+          applyButtonSettings(appSettings);
+        }
+      } catch (error) {
+        console.error('Error fetching app settings:', error);
+        // Use defaults
+        applyButtonSettings({});
+      }
+      return appSettings;
+    }
 
     // Convert inches to cm
     function inToCm(value) {
@@ -810,10 +908,16 @@
       return unit === 'cm' ? 'cm' : 'In';
     }
 
+    // Get table design from app settings
+    function getTableDesign() {
+      return appSettings?.tableDesign || 'classic';
+    }
+
     // Render table content
     function renderContent(template, unit = 'in') {
       const { name, columns, rows, guideImage, measureDescription } = template;
       const unitSuffix = getUnitSuffix(unit);
+      const tableDesign = getTableDesign();
 
       // Update title
       if (titleElement && name) {
@@ -833,9 +937,8 @@
         html += '<thead><tr>';
         columns.forEach((col, index) => {
           let label = col.label || col.name || col;
-          // Remove existing unit suffixes like (in), (cm), (In), (Cm) etc.
+          // Remove existing unit suffixes
           const cleanLabel = label.replace(/\s*\((in|cm|In|Cm)\)\s*$/i, '').trim();
-          // First column is usually "Size" - no unit suffix
           if (index === 0 && cleanLabel.toLowerCase().includes('size')) {
             html += `<th>${escapeHtml(cleanLabel)}</th>`;
           } else {
@@ -852,7 +955,6 @@
             columns.forEach((col, index) => {
               const key = col.key || col.name || col;
               let value = row[key] ?? '-';
-              // Don't convert the first column (Size)
               const colLabel = col.label || col.name || col;
               if (index === 0 && colLabel.toLowerCase().includes('size')) {
                 html += `<td>${escapeHtml(String(value))}</td>`;
@@ -911,12 +1013,10 @@
     function switchTab(tabName) {
       currentTab = tabName;
       
-      // Update tab buttons
       tabsContainer.querySelectorAll('.size-chart-tab').forEach(tab => {
         tab.classList.toggle('active', tab.dataset.tab === tabName);
       });
       
-      // Update tab content
       contentContainer.querySelectorAll('[data-tab-content]').forEach(content => {
         content.classList.toggle('active', content.dataset.tabContent === tabName);
       });
@@ -926,12 +1026,10 @@
     function switchUnit(unit) {
       currentUnit = unit;
       
-      // Update unit buttons
       unitToggle.querySelectorAll('.size-chart-unit-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.unit === unit);
       });
       
-      // Re-render content with new unit
       if (templateData) {
         renderContent(templateData, unit);
       }
@@ -957,15 +1055,18 @@
           templateData = data.template;
           isLoaded = true;
         }
-        // If no template, button stays hidden
       } catch (error) {
         console.error('Error checking size chart:', error);
-        // On error, keep button hidden
       }
     }
 
     // Fetch size chart data
     async function fetchSizeChart() {
+      // Wait for settings to be loaded first
+      if (!appSettings && settingsPromise) {
+        await settingsPromise;
+      }
+
       if (isLoaded && templateData) {
         renderContent(templateData, currentUnit);
         return;
@@ -998,9 +1099,6 @@
         renderError('Failed to load size chart. Please try again.');
       }
     }
-
-    // Check template on page load
-    checkTemplateExists();
 
     // Open modal
     function openModal() {
@@ -1062,6 +1160,10 @@
     document.addEventListener('shopify:section:select', handleShopifyEditorEvent);
     document.addEventListener('shopify:block:select', handleShopifyEditorEvent);
     document.addEventListener('shopify:block:deselect', handleShopifyEditorEvent);
+
+    // Initialize: fetch app settings and check template
+    settingsPromise = fetchAppSettings();
+    checkTemplateExists();
   })();
 </script>
 
@@ -1074,56 +1176,60 @@
   },
   "settings": [
     {
-      "type": "text",
-      "id": "button_text",
-      "label": "Button text",
-      "default": "Size Guide"
+      "type": "header",
+      "content": "Layout"
     },
     {
       "type": "select",
       "id": "button_alignment",
-      "label": "Alignment",
+      "label": "Button alignment",
       "options": [
-        { "value": "flex-start", "label": "Left" },
+        { "value": "app", "label": "Use app default" },
+        { "value": "left", "label": "Left" },
         { "value": "center", "label": "Center" },
-        { "value": "flex-end", "label": "Right" }
+        { "value": "right", "label": "Right" }
       ],
-      "default": "flex-start"
-    },
-    {
-      "type": "select",
-      "id": "table_design",
-      "label": "Table design",
-      "options": [
-        { "value": "classic", "label": "Classic" },
-        { "value": "minimal", "label": "Minimal" },
-        { "value": "striped", "label": "Striped" },
-        { "value": "modern", "label": "Modern" },
-        { "value": "elegant", "label": "Elegant" }
-      ],
-      "default": "classic"
+      "default": "app"
     },
     {
       "type": "range",
-      "id": "font_size",
-      "label": "Font size",
-      "min": 10,
+      "id": "button_margin_top",
+      "label": "Top margin",
+      "min": 0,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "default": 10
+    },
+    {
+      "type": "range",
+      "id": "button_margin_bottom",
+      "label": "Bottom margin",
+      "min": 0,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "default": 10
+    },
+    {
+      "type": "range",
+      "id": "button_padding_vertical",
+      "label": "Vertical padding",
+      "min": 4,
       "max": 24,
       "step": 1,
-      "default": 14,
-      "unit": "px"
+      "unit": "px",
+      "default": 10
     },
     {
-      "type": "color",
-      "id": "text_color",
-      "label": "Text color",
-      "default": "#ffffff"
-    },
-    {
-      "type": "color",
-      "id": "background_color",
-      "label": "Background color",
-      "default": "#111111"
+      "type": "range",
+      "id": "button_padding_horizontal",
+      "label": "Horizontal padding",
+      "min": 8,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "default": 20
     }
   ]
 }
