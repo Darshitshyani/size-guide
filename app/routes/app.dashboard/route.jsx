@@ -416,6 +416,7 @@ export const loader = async ({ request }) => {
               id
               name
               createdAt
+              cancelledAt
               lineItems(first: 50) {
                 edges {
                   node {
@@ -450,6 +451,10 @@ export const loader = async ({ request }) => {
 
   for (const edge of allOrders) {
     const order = edge.node;
+    // Skip cancelled orders
+    if (order.cancelledAt) {
+      continue;
+    }
     for (const liEdge of order.lineItems.edges) {
       const li = liEdge.node;
       const attrs = li.customAttributes || [];
