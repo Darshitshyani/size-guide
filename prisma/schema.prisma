@@ -147,3 +147,26 @@ model SizeChartSettings {
 
   @@index([shop])
 }
+
+// Custom Order Status Tracking
+model CustomOrderStatus {
+  id              String   @id @default(uuid())
+  shop            String   // Shop domain
+  orderId         String   // Shopify order ID or temp ID
+  orderName       String   // Order name (e.g., #1001 or Pending Order)
+  lineItemId      String   // Line item ID within the order
+  productId       String   // Product ID
+  productTitle    String   // Product title
+  productImage    String?  // Product image URL
+  variantTitle    String?  // Variant title
+  measurements    String   // JSON string of measurements
+  options         String?  // JSON string of options (fit, collar, notes)
+  status          String   @default("pending") // pending, accepted, rejected, dispatched
+  notes           String?  // Internal notes
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([shop, orderId, lineItemId])
+  @@index([shop])
+  @@index([status])
+}

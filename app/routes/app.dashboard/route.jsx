@@ -6,7 +6,7 @@ import prisma from "../../db.server";
 
 // Action handler for assigning templates to products
 export const action = async ({ request }) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const shop = session.shop;
   const formData = await request.formData();
   const intent = formData.get("intent");
@@ -166,6 +166,105 @@ export const action = async ({ request }) => {
     }
   }
 
+  // Update custom order status
+  if (intent === "updateOrderStatus") {
+    const orderId = formData.get("orderId");
+    const lineItemId = formData.get("lineItemId");
+    const status = formData.get("status");
+    const orderName = formData.get("orderName");
+    const productId = formData.get("productId");
+    const productTitle = formData.get("productTitle");
+    const productImage = formData.get("productImage");
+    const variantTitle = formData.get("variantTitle");
+    const measurements = formData.get("measurements");
+    const options = formData.get("options");
+    const notes = formData.get("notes");
+
+    try {
+      const result = await prisma.customOrderStatus.upsert({
+        where: {
+          shop_orderId_lineItemId: {
+            shop,
+            orderId,
+            lineItemId,
+          },
+        },
+        update: {
+          status,
+          notes: notes || null,
+          updatedAt: new Date(),
+        },
+        create: {
+          shop,
+          orderId,
+          orderName,
+          lineItemId,
+          productId,
+          productTitle,
+          productImage: productImage || null,
+          variantTitle: variantTitle || null,
+          measurements: measurements || '{}',
+          options: options || null,
+          status,
+          notes: notes || null,
+        },
+      });
+
+      // Sync status with Shopify Order tag
+      try {
+        if (orderId) {
+          const orderGid = orderId.startsWith("gid://")
+            ? orderId
+            : `gid://shopify/Order/${orderId}`;
+
+          const tagMutationName = status === "dispatched" ? "tagsAdd" : "tagsRemove";
+
+          const tagResponse = await admin.graphql(
+            `#graphql
+              mutation setOrderTag($id: ID!, $tags: [String!]!) {
+                ${tagMutationName}(id: $id, tags: $tags) {
+                  userErrors {
+                    field
+                    message
+                  }
+                }
+              }
+            `,
+            {
+              variables: {
+                id: orderGid,
+                tags: ["Ready to Dispatch"],
+              },
+            }
+          );
+
+          const tagJson = await tagResponse.json();
+          const errors =
+            tagJson.data?.[tagMutationName]?.userErrors ||
+            tagJson.errors ||
+            [];
+          if (errors.length > 0) {
+            console.warn("Order tag sync errors:", errors);
+          }
+        }
+      } catch (tagError) {
+        console.warn("Failed to sync order tag with Shopify:", tagError);
+      }
+
+      return {
+        success: true,
+        intent: "updateOrderStatus",
+        orderId,
+        lineItemId,
+        status,
+        message: `Order status updated to ${status}!`,
+      };
+    } catch (error) {
+      console.error("Error updating order status:", error);
+      return { success: false, error: "Failed to update order status" };
+    }
+  }
+
   return { success: false, error: "Unknown intent" };
 };
 
@@ -307,9 +406,133 @@ export const loader = async ({ request }) => {
   const responseJson = await response.json();
   const products = responseJson.data?.products?.edges || [];
 
+  // Fetch recent Shopify orders that may contain custom measurements
+  const ordersResponse = await admin.graphql(
+    `#graphql
+      query getOrders {
+        orders(first: 50, sortKey: CREATED_AT, reverse: true) {
+          edges {
+            node {
+              id
+              name
+              createdAt
+              lineItems(first: 50) {
+                edges {
+                  node {
+                    id
+                    title
+                    variantTitle
+                    quantity
+                    customAttributes {
+                      key
+                      value
+                    }
+                    product {
+                      id
+                    }
+                    image {
+                      url
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }`
+  );
+
+  const ordersJson = await ordersResponse.json();
+  const allOrders = ordersJson.data?.orders?.edges || [];
+
+  // Build list of line items that have custom measurement properties
+  const customOrderItems = [];
+
+  for (const edge of allOrders) {
+    const order = edge.node;
+    for (const liEdge of order.lineItems.edges) {
+      const li = liEdge.node;
+      const attrs = li.customAttributes || [];
+
+      const hasCustom =
+        attrs.some((a) => a?.key === "Custom Order") ||
+        attrs.some((a) => a?.key?.startsWith("_"));
+
+      if (!hasCustom) continue;
+
+      const orderId = order.id.split("/").pop() || "";
+      const lineItemId = li.id.split("/").pop() || "";
+      const productId = li.product?.id?.split("/").pop() || "";
+
+      const measurements = {};
+      const options = {};
+
+      attrs.forEach((attr) => {
+        if (!attr || !attr.key) return;
+        if (attr.key.startsWith("_")) {
+          measurements[attr.key.substring(1)] = attr.value;
+        } else if (
+          attr.key === "Fit" ||
+          attr.key === "Collar" ||
+          attr.key === "Notes" ||
+          attr.key === "Custom Order"
+        ) {
+          options[attr.key] = attr.value;
+        } else {
+          options[attr.key] = attr.value;
+        }
+      });
+
+      customOrderItems.push({
+        orderId,
+        orderName: order.name || `Order ${orderId}`,
+        lineItemId,
+        productId,
+        productTitle: li.title,
+        productImage: li.image?.url || "",
+        variantTitle: li.variantTitle || "",
+        measurements,
+        options,
+        orderDate: order.createdAt,
+      });
+    }
+  }
+
+  // Fetch existing custom order statuses from DB (used only for status/notes)
+  const dbStatuses = await prisma.customOrderStatus.findMany({
+    where: { shop },
+  });
+
+  const statusMap = {};
+  dbStatuses.forEach((s) => {
+    statusMap[`${s.orderId}_${s.lineItemId}`] = s;
+  });
+
+  const customOrders = customOrderItems.map((item) => {
+    const key = `${item.orderId}_${item.lineItemId}`;
+    const s = statusMap[key];
+
+    return {
+      id: s?.id || null,
+      orderId: item.orderId,
+      orderName: item.orderName,
+      lineItemId: item.lineItemId,
+      productId: item.productId,
+      productTitle: item.productTitle,
+      productImage: item.productImage,
+      variantTitle: item.variantTitle,
+      measurements: item.measurements,
+      options: item.options,
+      status: s?.status || "pending",
+      internalNotes: s?.notes || "",
+      orderDate: item.orderDate,
+    };
+  });
+
   return {
     templates,
     customTemplates,
+    customOrders,
     products: products.map((edge) => {
       const productId = edge.node.id.split("/").pop() || "";
       const numericId = productId.replace(/\D/g, "") || productId;
@@ -343,10 +566,14 @@ export const loader = async ({ request }) => {
 };
 
 export default function Dashboard() {
-  const { products: initialProducts, templates, customTemplates } = useLoaderData();
+  const { products: initialProducts, templates, customTemplates, customOrders: initialCustomOrders } = useLoaderData();
   const fetcher = useFetcher();
   const [products, setProducts] = useState(initialProducts);
+  const [customOrders, setCustomOrders] = useState(initialCustomOrders || []);
   const [activeTab, setActiveTab] = useState("products");
+  const [orderSearchQuery, setOrderSearchQuery] = useState("");
+  const [orderStatusFilter, setOrderStatusFilter] = useState("All");
+  const [printModalOrder, setPrintModalOrder] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [openDropdownId, setOpenDropdownId] = useState(null);
@@ -394,6 +621,10 @@ export default function Dashboard() {
   useEffect(() => {
     setProducts(initialProducts);
   }, [initialProducts]);
+
+  useEffect(() => {
+    setCustomOrders(initialCustomOrders || []);
+  }, [initialCustomOrders]);
 
   const selectedProduct =
     selectTemplateModal != null
@@ -485,6 +716,17 @@ export default function Dashboard() {
           // Close dropdown
           setOpenDropdownId(null);
         }
+      }
+
+      // Handle order status update
+      if (intent === "updateOrderStatus") {
+        const { orderId, lineItemId, status } = fetcher.data;
+        setCustomOrders(prev => prev.map(order => {
+          if (order.orderId === orderId && order.lineItemId === lineItemId) {
+            return { ...order, status };
+          }
+          return order;
+        }));
       }
     }
   }, [fetcher.data]);
@@ -800,127 +1042,128 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Search and Filter Section */}
-        <div className="flex items-center gap-3 mb-3 flex-shrink-0">
-          <div className="flex-1 flex items-center gap-3 px-4 py-2.5 border border-gray-300 rounded-lg bg-white  focus-within:border-gray-400 focus-within:shadow-md transition-all duration-200">
-            <span className="text-gray-400 text-lg">🔍</span>
-            <input
-              type="text"
-              className="flex-1 border-none outline-none text-sm text-gray-900 placeholder-gray-400 bg-transparent"
-              placeholder="Search by ID, name, status..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={handleToggleFilters}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium  text-gray-700 rounded-lg hover:bg-gray-200 active:bg-gray-300 border border-gray-300 cursor-pointer  hover:shadow-md transition-all duration-200 ease-in-out focus:outline-none"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-              Filters
-            </button>
-            {isFiltersOpen && (
-              <div
-                ref={filtersModalRef}
-                className="absolute right-0 top-full  min-w-90 bg-white  rounded-lg shadow-lg border border-gray-200 z-50"
-                style={{ marginTop: '4px' }}
+        {/* Search and Filter Section (Products tab only) */}
+        {activeTab === "products" && (
+          <div className="flex items-center gap-3 mb-3 flex-shrink-0">
+            <div className="flex-1 flex items-center gap-3 px-4 py-2.5 border border-gray-300 rounded-lg bg-white  focus-within:border-gray-400 focus-within:shadow-md transition-all duration-200">
+              <span className="text-gray-400 text-lg">🔍</span>
+              <input
+                type="text"
+                className="flex-1 border-none outline-none text-sm text-gray-900 placeholder-gray-400 bg-transparent"
+                placeholder="Search by ID, name, status..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={handleToggleFilters}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium  text-gray-700 rounded-lg hover:bg-gray-200 active:bg-gray-300 border border-gray-300 cursor-pointer  hover:shadow-md transition-all duration-200 ease-in-out focus:outline-none"
               >
-                <div className="p-6 w-full">
-                  <h2 className="text-lg font-bold text-gray-900 mb-2">Filters</h2>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+                Filters
+              </button>
+              {isFiltersOpen && (
+                <div
+                  ref={filtersModalRef}
+                  className="absolute right-0 top-full  min-w-90 bg-white  rounded-lg shadow-lg border border-gray-200 z-50"
+                  style={{ marginTop: '4px' }}
+                >
+                  <div className="p-6 w-full">
+                    <h2 className="text-lg font-bold text-gray-900 mb-2">Filters</h2>
 
-                  {/* Table Chart Status Section */}
-                  <div className="mb-3 w-full" >
-                    <h3 className="text-sm font-medium text-gray-900 mb-3">Table Chart Status</h3>
-                    <div className="flex gap-2 flex-wrap">
-                      {["All", "Active", "Not Active", "Not Assigned"].map((status) => (
-                        <button
-                          key={status}
-                          type="button"
-                          onClick={() => handleTableChartStatusChange(status)}
-                          className={`px-4 py-1.5 text-[12px] font-medium cursor-pointer rounded-full transition-colors ${tableChartStatus === status
-                            ? "bg-gray-800 text-white"
-                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                            }`}
-                        >
-                          {status}
-                        </button>
-                      ))}
+                    {/* Table Chart Status Section */}
+                    <div className="mb-3 w-full" >
+                      <h3 className="text-sm font-medium text-gray-900 mb-3">Table Chart Status</h3>
+                      <div className="flex gap-2 flex-wrap">
+                        {["All", "Active", "Not Active", "Not Assigned"].map((status) => (
+                          <button
+                            key={status}
+                            type="button"
+                            onClick={() => handleTableChartStatusChange(status)}
+                            className={`px-4 py-1.5 text-[12px] font-medium cursor-pointer rounded-full transition-colors ${tableChartStatus === status
+                              ? "bg-gray-800 text-white"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                              }`}
+                          >
+                            {status}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Custom Chart Status Section */}
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900 mb-3">Custom Chart Status</h3>
+                      <div className="flex gap-2 flex-wrap">
+                        {["All", "Active", "Not Active", "Not Assigned"].map((status) => (
+                          <button
+                            key={status}
+                            type="button"
+                            onClick={() => handleCustomChartStatusChange(status)}
+                            className={`px-4 py-1.5 text-[12px] font-medium cursor-pointer rounded-full transition-colors ${customChartStatus === status
+                              ? "bg-gray-800 text-white"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                              }`}
+                          >
+                            {status}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
-
-                  {/* Custom Chart Status Section */}
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={handleToggleCancelCharts}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-red-100 text-red-500 rounded-lg hover:bg-red-300  border border-red-300 cursor-pointer shadow-sm hover:shadow-md transition-all duration-200 ease-in-out focus:outline-none"
+              >
+                Cancel Charts
+                <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+              {isCancelChartsOpen && (
+                <div
+                  ref={cancelChartsDropdownRef}
+                  className="absolute right-0 top-full mt-1 w-64 bg-white rounded-md shadow-lg border border-gray-200 z-50"
+                  style={{ marginTop: '4px' }}
+                >
                   <div>
-                    <h3 className="text-sm font-medium text-gray-900 mb-3">Custom Chart Status</h3>
-                    <div className="flex gap-2 flex-wrap">
-                      {["All", "Active", "Not Active", "Not Assigned"].map((status) => (
-                        <button
-                          key={status}
-                          type="button"
-                          onClick={() => handleCustomChartStatusChange(status)}
-                          className={`px-4 py-1.5 text-[12px] font-medium cursor-pointer rounded-full transition-colors ${customChartStatus === status
-                            ? "bg-gray-800 text-white"
-                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                            }`}
-                        >
-                          {status}
-                        </button>
-                      ))}
+                    <div
+                      onClick={handleRemoveTableCharts}
+                      className="cursor-pointer hover:bg-gray-50 px-4 py-3 transition-colors"
+                    >
+                      <h3 className="text-sm font-semibold text-gray-900 mb-1">Remove Table Charts</h3>
+                      <p className="text-xs text-gray-500">{tableChartsCount} chart{tableChartsCount !== 1 ? 's' : ''}</p>
                     </div>
+                    <div
+                      onClick={handleRemoveCustomCharts}
+                      className="cursor-pointer hover:bg-gray-50 px-4 py-3 transition-colors"
+                    >
+                      <h3 className="text-sm font-semibold text-gray-900 mb-1">Remove Custom Charts</h3>
+                      <p className="text-xs text-gray-500">{customChartsCount} chart{customChartsCount !== 1 ? 's' : ''}</p>
+                    </div>
+                    <div className="border-t border-gray-200 "></div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveAllCharts}
+                      className="w-full cursor-pointer text-left px-4 py-3 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
+                    >
+                      Remove All Charts ({totalChartsCount})
+                    </button>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={handleToggleCancelCharts}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-red-100 text-red-500 rounded-lg hover:bg-red-300  border border-red-300 cursor-pointer shadow-sm hover:shadow-md transition-all duration-200 ease-in-out focus:outline-none"
-            >
-
-              Cancel Charts
-              <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-            {isCancelChartsOpen && (
-              <div
-                ref={cancelChartsDropdownRef}
-                className="absolute right-0 top-full mt-1 w-64 bg-white rounded-md shadow-lg border border-gray-200 z-50"
-                style={{ marginTop: '4px' }}
-              >
-                <div>
-                  <div
-                    onClick={handleRemoveTableCharts}
-                    className="cursor-pointer hover:bg-gray-50 px-4 py-3 transition-colors"
-                  >
-                    <h3 className="text-sm font-semibold text-gray-900 mb-1">Remove Table Charts</h3>
-                    <p className="text-xs text-gray-500">{tableChartsCount} chart{tableChartsCount !== 1 ? 's' : ''}</p>
-                  </div>
-                  <div
-                    onClick={handleRemoveCustomCharts}
-                    className="cursor-pointer hover:bg-gray-50 px-4 py-3 transition-colors"
-                  >
-                    <h3 className="text-sm font-semibold text-gray-900 mb-1">Remove Custom Charts</h3>
-                    <p className="text-xs text-gray-500">{customChartsCount} chart{customChartsCount !== 1 ? 's' : ''}</p>
-                  </div>
-                  <div className="border-t border-gray-200 "></div>
-                  <button
-                    type="button"
-                    onClick={handleRemoveAllCharts}
-                    className="w-full cursor-pointer text-left px-4 py-3 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 transition-colors"
-                  >
-                    Remove All Charts ({totalChartsCount})
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* Products Table */}
         {activeTab === "products" && (
@@ -1162,8 +1405,310 @@ export default function Dashboard() {
         )}
 
         {activeTab === "custom-orders" && (
-          <div className="flex items-center justify-center py-12 text-center">
-            <p className="text-gray-500 text-base">Custom Orders coming soon...</p>
+          <div className="border border-gray-200 rounded-md bg-white flex-1 flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-gray-200 bg-white flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search by order ID, product name..."
+                    value={orderSearchQuery}
+                    onChange={(e) => setOrderSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-gray-400"
+                  />
+                </div>
+                <select
+                  value={orderStatusFilter}
+                  onChange={(e) => setOrderStatusFilter(e.target.value)}
+                  className="px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-gray-400 bg-white"
+                >
+                  <option value="All">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="dispatched">Dispatched</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto">
+              <div className="p-4">
+                {/* Custom Orders List */}
+                {customOrders.length === 0 ? (
+                  <div className="min-h-[360px] flex flex-col items-center justify-center text-center">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    </div>
+                    <h3 className="text-base font-medium text-gray-900 mb-1">No Custom Orders Yet</h3>
+                    <p className="text-gray-500 text-sm max-w-md">
+                      Orders will appear here after a customer adds a product with custom measurements to cart.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {customOrders
+                      .filter(order => {
+                        const matchesSearch = orderSearchQuery === "" || 
+                          order.orderName.toLowerCase().includes(orderSearchQuery.toLowerCase()) ||
+                          order.productTitle.toLowerCase().includes(orderSearchQuery.toLowerCase());
+                        const matchesStatus = orderStatusFilter === "All" || order.status === orderStatusFilter;
+                        return matchesSearch && matchesStatus;
+                      })
+                      .map((order) => (
+                    <div key={`${order.orderId}_${order.lineItemId}`} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                      {/* Order Header */}
+                      <div className="p-4">
+                        <div className="flex items-center gap-4">
+                          {/* Product Image */}
+                          <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                            {order.productImage ? (
+                              <img src={order.productImage} alt={order.productTitle} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Order Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-gray-900">{order.orderName}</span>
+                              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                                order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                order.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                                order.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                order.status === 'dispatched' ? 'bg-blue-100 text-blue-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 truncate">{order.productTitle} {order.variantTitle ? `- ${order.variantTitle}` : ''}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {new Date(order.orderDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                setPrintModalOrder(order);
+                              }}
+                              className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-1.5"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                              </svg>
+                              Print
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                const nextStatus = order.status === "dispatched" ? "pending" : "dispatched";
+                                const formData = new FormData();
+                                formData.append("intent", "updateOrderStatus");
+                                formData.append("orderId", order.orderId);
+                                formData.append("lineItemId", order.lineItemId);
+                                formData.append("orderName", order.orderName);
+                                formData.append("productId", order.productId);
+                                formData.append("productTitle", order.productTitle);
+                                formData.append("productImage", order.productImage || "");
+                                formData.append("variantTitle", order.variantTitle || "");
+                                formData.append("measurements", JSON.stringify(order.measurements));
+                                formData.append("options", JSON.stringify(order.options));
+                                formData.append("status", nextStatus);
+                                fetcher.submit(formData, { method: "post" });
+                              }}
+                              className={`px-3 py-1.5 text-xs font-medium rounded-lg flex items-center gap-1.5 ${
+                                order.status === "dispatched"
+                                  ? "text-gray-700 bg-gray-100 border border-gray-300 hover:bg-gray-200"
+                                  : "text-white bg-blue-600 border border-blue-600 hover:bg-blue-700"
+                              }`}
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+                                />
+                              </svg>
+                              {order.status === "dispatched" ? "Mark Not Ready" : "Ready to Dispatch"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Details removed (summary row only) */}
+                    </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Print Modal */}
+        {printModalOrder && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden">
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Print Measurement Data</h3>
+                <button onClick={() => setPrintModalOrder(null)} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto" id="print-content">
+                <div className="text-center mb-6">
+                  <h2 className="text-xl font-bold text-gray-900">{printModalOrder.productTitle}</h2>
+                  <p className="text-sm font-medium text-gray-700 mt-1">Order: {printModalOrder.orderName}</p>
+                  {printModalOrder.variantTitle && (
+                    <p className="text-xs text-gray-400">{printModalOrder.variantTitle}</p>
+                  )}
+                </div>
+
+                <div className="mb-6">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3 border-b pb-2">Measurements</h4>
+                  {Object.keys(printModalOrder.measurements).length > 0 ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {Object.entries(printModalOrder.measurements).map(([key, value]) => (
+                        <div key={key} className="flex justify-between border-b border-gray-100 pb-1">
+                          <span className="text-gray-600 text-sm">{key}</span>
+                          <span className="font-medium text-sm">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No measurements</p>
+                  )}
+                </div>
+
+                {Object.keys(printModalOrder.options).length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-semibold text-gray-900 mb-3 border-b pb-2">Options & Preferences</h4>
+                    <div className="space-y-2">
+                      {Object.entries(printModalOrder.options).map(([key, value]) => (
+                        <div key={key} className="flex justify-between border-b border-gray-100 pb-1">
+                          <span className="text-gray-600 text-sm">{key}</span>
+                          <span className="font-medium text-sm">{value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-center text-xs text-gray-400 mt-6 pt-4 border-t">
+                  Order Date: {new Date(printModalOrder.orderDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </div>
+              </div>
+              <div className="p-4 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  onClick={() => setPrintModalOrder(null)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const printWindow = window.open('', '', 'width=600,height=800');
+                    if (!printWindow) return;
+
+                    const measurements = Object.entries(printModalOrder.measurements || {})
+                      .filter(([, value]) => value != null && String(value).trim() !== '');
+                    const options = Object.entries(printModalOrder.options || {})
+                      .filter(([key]) => key !== 'Custom Order')
+                      .filter(([, value]) => value != null && String(value).trim() !== '');
+
+                    const measurementRows = measurements.length
+                      ? measurements.map(
+                          ([key, value]) =>
+                            `<tr class="row"><td class="label">${key}</td><td class="value">${value}</td></tr>`
+                        ).join('')
+                      : '<tr class="row"><td class="label" colspan="2">No measurements</td></tr>';
+
+                    const optionRows = options.length
+                      ? options.map(
+                          ([key, value]) =>
+                            `<tr class="row"><td class="label">${key}</td><td class="value">${value}</td></tr>`
+                        ).join('')
+                      : '';
+
+                    printWindow.document.write(`
+                      <html>
+                        <head>
+                          <title>Print Measurements - ${printModalOrder.orderName}</title>
+                          <style>
+                            body { font-family: system-ui, -apple-system, sans-serif; padding: 24px; color:#111827; }
+                            h1 { font-size: 20px; margin: 0 0 2px 0; }
+                            h2 { font-size: 16px; margin: 0 0 16px 0; color:#4b5563; }
+                            h3 { font-size: 14px; margin: 24px 0 8px 0; padding-bottom: 4px; border-bottom:1px solid #e5e7eb; }
+                            table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+                            .row { border-bottom: 1px solid #f3f4f6; }
+                            .row:last-child { border-bottom: none; }
+                            td { padding: 4px 0; font-size: 13px; }
+                            .label { color: #6b7280; }
+                            .value { font-weight: 500; }
+                            .meta { font-size: 12px; color:#6b7280; margin-top:4px; }
+                            .footer { text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px; padding-top: 8px; border-top: 1px solid #e5e7eb; }
+                          </style>
+                        </head>
+                        <body>
+                          <header>
+                            <h1>${printModalOrder.productTitle}</h1>
+                            <h2>Order: ${printModalOrder.orderName}</h2>
+                            ${printModalOrder.variantTitle ? `<div class="meta">Variant: ${printModalOrder.variantTitle}</div>` : ''}
+                            <div class="meta">Order date: ${new Date(printModalOrder.orderDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</div>
+                          </header>
+
+                          <section>
+                            <h3>Measurements</h3>
+                            <table>
+                              <tbody>
+                                ${measurementRows}
+                              </tbody>
+                            </table>
+                          </section>
+
+                          ${optionRows ? `
+                          <section>
+                            <h3>Options & Preferences</h3>
+                            <table>
+                              <tbody>
+                                ${optionRows}
+                              </tbody>
+                            </table>
+                          </section>
+                          ` : ''}
+
+                          <div class="footer">
+                            Generated by Tailor Size Guide
+                          </div>
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                    printWindow.print();
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Print
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
