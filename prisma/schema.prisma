@@ -128,6 +128,20 @@ model SizeChartSettings {
   // Table Settings
   tableDesign     String   @default("classic") // classic, minimal, striped, modern, elegant
   
+  // Custom Order Button Settings
+  customOrderButtonText      String   @default("Custom Order")
+  customOrderButtonIcon      String   @default("ruler") // ruler, shirt, grid, info, hanger, none
+  customOrderButtonTextColor String   @default("#ffffff")
+  customOrderButtonBgColor   String   @default("#111111")
+  customOrderButtonBorderRadius Int   @default(6)
+  customOrderButtonBorderStyle   String @default("none") // none, solid, dashed, dotted
+  customOrderButtonBorderColor   String @default("#111111")
+  customOrderButtonBorderWidth   Int    @default(1)
+  customOrderButtonBorderTop     Boolean @default(true)
+  customOrderButtonBorderRight   Boolean @default(true)
+  customOrderButtonBorderBottom  Boolean @default(true)
+  customOrderButtonBorderLeft    Boolean @default(true)
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

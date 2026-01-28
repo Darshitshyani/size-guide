@@ -14,7 +14,21 @@ export const loader = async ({ request }) => {
 
   if (!settings) {
     settings = await prisma.sizeChartSettings.create({
-      data: { shop },
+      data: { 
+        shop,
+        customOrderButtonText: "Custom Order",
+        customOrderButtonIcon: "ruler",
+        customOrderButtonTextColor: "#ffffff",
+        customOrderButtonBgColor: "#111111",
+        customOrderButtonBorderRadius: 6,
+        customOrderButtonBorderStyle: "none",
+        customOrderButtonBorderColor: "#111111",
+        customOrderButtonBorderWidth: 1,
+        customOrderButtonBorderTop: true,
+        customOrderButtonBorderRight: true,
+        customOrderButtonBorderBottom: true,
+        customOrderButtonBorderLeft: true,
+      },
     });
   }
 
@@ -86,6 +100,27 @@ export const action = async ({ request }) => {
     buttonBorderBottom: formData.get("buttonBorderBottom") === "on",
     buttonBorderLeft: formData.get("buttonBorderLeft") === "on",
     tableDesign: formData.get("tableDesign") || "classic",
+    // Custom Order Button Settings
+    customOrderButtonText: formData.get("customOrderButtonText") || "Custom Order",
+    customOrderButtonIcon: formData.get("customOrderButtonIcon") || "ruler",
+    customOrderButtonTextColor: formData.get("customOrderButtonTextColor") || "#ffffff",
+    customOrderButtonBgColor: formData.get("customOrderButtonBgColor") || "#111111",
+    customOrderButtonBorderRadius: getIntOrExisting(
+      "customOrderButtonBorderRadius",
+      existing?.customOrderButtonBorderRadius,
+      6
+    ),
+    customOrderButtonBorderStyle: formData.get("customOrderButtonBorderStyle") || "none",
+    customOrderButtonBorderColor: formData.get("customOrderButtonBorderColor") || "#111111",
+    customOrderButtonBorderWidth: getIntOrExisting(
+      "customOrderButtonBorderWidth",
+      existing?.customOrderButtonBorderWidth,
+      1
+    ),
+    customOrderButtonBorderTop: formData.get("customOrderButtonBorderTop") === "on",
+    customOrderButtonBorderRight: formData.get("customOrderButtonBorderRight") === "on",
+    customOrderButtonBorderBottom: formData.get("customOrderButtonBorderBottom") === "on",
+    customOrderButtonBorderLeft: formData.get("customOrderButtonBorderLeft") === "on",
   };
 
   const settings = await prisma.sizeChartSettings.upsert({
@@ -429,6 +464,8 @@ export default function LayoutPage() {
   const { settings } = useLoaderData();
   const fetcher = useFetcher();
 
+  const [activeTab, setActiveTab] = useState("sizeGuide");
+
   const [formState, setFormState] = useState({
     buttonText: settings.buttonText,
     buttonIcon: settings.buttonIcon,
@@ -448,6 +485,19 @@ export default function LayoutPage() {
     buttonBorderBottom: settings.buttonBorderBottom,
     buttonBorderLeft: settings.buttonBorderLeft,
     tableDesign: settings.tableDesign,
+    // Custom Order Button Settings
+    customOrderButtonText: settings.customOrderButtonText || "Custom Order",
+    customOrderButtonIcon: settings.customOrderButtonIcon || "ruler",
+    customOrderButtonTextColor: settings.customOrderButtonTextColor || "#ffffff",
+    customOrderButtonBgColor: settings.customOrderButtonBgColor || "#111111",
+    customOrderButtonBorderRadius: settings.customOrderButtonBorderRadius ?? 6,
+    customOrderButtonBorderStyle: settings.customOrderButtonBorderStyle || "none",
+    customOrderButtonBorderColor: settings.customOrderButtonBorderColor || "#111111",
+    customOrderButtonBorderWidth: settings.customOrderButtonBorderWidth ?? 1,
+    customOrderButtonBorderTop: settings.customOrderButtonBorderTop ?? true,
+    customOrderButtonBorderRight: settings.customOrderButtonBorderRight ?? true,
+    customOrderButtonBorderBottom: settings.customOrderButtonBorderBottom ?? true,
+    customOrderButtonBorderLeft: settings.customOrderButtonBorderLeft ?? true,
   });
 
   const [showSuccess, setShowSuccess] = useState(false);
@@ -530,6 +580,33 @@ export default function LayoutPage() {
     ),
   };
 
+  // Custom Order Button Preview Style
+  const customOrderPreviewButtonStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "10px 20px",
+    fontSize: "14px",
+    fontWeight: "500",
+    color: formState.customOrderButtonTextColor,
+    backgroundColor: formState.customOrderButtonBgColor,
+    borderRadius: `${formState.customOrderButtonBorderRadius}px`,
+    cursor: "pointer",
+    borderStyle: "none",
+    borderWidth: 0,
+  };
+
+  if (formState.customOrderButtonBorderStyle && formState.customOrderButtonBorderStyle !== "none") {
+    const width = formState.customOrderButtonBorderWidth || 1;
+    const style = formState.customOrderButtonBorderStyle || "solid";
+    customOrderPreviewButtonStyle.borderStyle = style;
+    customOrderPreviewButtonStyle.borderColor = formState.customOrderButtonBorderColor;
+    customOrderPreviewButtonStyle.borderTopWidth = formState.customOrderButtonBorderTop ? `${width}px` : "0";
+    customOrderPreviewButtonStyle.borderRightWidth = formState.customOrderButtonBorderRight ? `${width}px` : "0";
+    customOrderPreviewButtonStyle.borderBottomWidth = formState.customOrderButtonBorderBottom ? `${width}px` : "0";
+    customOrderPreviewButtonStyle.borderLeftWidth = formState.customOrderButtonBorderLeft ? `${width}px` : "0";
+  }
+
   return (
     <div
       className="p-5"
@@ -550,9 +627,9 @@ export default function LayoutPage() {
           }}
         >
           <div>
-            <h1 style={styles.title}>Size Chart Button Layout</h1>
+            <h1 style={styles.title}>Button Layout</h1>
             <p style={styles.subtitle}>
-              Customize the appearance of the Size Guide button on your storefront
+              Customize the appearance of buttons on your storefront
             </p>
           </div>
 
@@ -585,6 +662,47 @@ export default function LayoutPage() {
           </div>
         </div>
 
+        {/* Tabs */}
+        <div style={{ marginBottom: "24px", borderBottom: "1px solid #e5e7eb" }}>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={() => setActiveTab("sizeGuide")}
+              style={{
+                padding: "12px 24px",
+                fontSize: "14px",
+                fontWeight: "500",
+                color: activeTab === "sizeGuide" ? "#111827" : "#6b7280",
+                background: "none",
+                border: "none",
+                borderBottom: activeTab === "sizeGuide" ? "2px solid #111827" : "2px solid transparent",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+            >
+              Table Size Guide
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("customOrder")}
+              style={{
+                padding: "12px 24px",
+                fontSize: "14px",
+                fontWeight: "500",
+                color: activeTab === "customOrder" ? "#111827" : "#6b7280",
+                background: "none",
+                border: "none",
+                borderBottom: activeTab === "customOrder" ? "2px solid #111827" : "2px solid transparent",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+            >
+              Custom Order Button
+            </button>
+          </div>
+        </div>
+
+        {activeTab === "sizeGuide" && (
         <div
           style={{
             display: "grid",
@@ -601,7 +719,7 @@ export default function LayoutPage() {
               <div
                 style={{
                   ...styles.previewArea,
-                  justifyContent: "flex-start",
+                  justifyContent: "center",
                 }}
               >
                 <button type="button" style={previewButtonStyle}>
@@ -615,9 +733,13 @@ export default function LayoutPage() {
             <div
               style={{
                 marginTop: "16px",
-                height: "calc(100vh - 360px)",
+                maxHeight: "calc(100vh - 420px)",
+                height: "calc(100vh - 420px)",
                 overflowY: "auto",
-                paddingRight: "4px",
+                overflowX: "hidden",
+                paddingRight: "8px",
+                paddingBottom: "20px",
+                WebkitOverflowScrolling: "touch",
               }}
             >
               {/* Button Settings */}
@@ -906,6 +1028,291 @@ export default function LayoutPage() {
             </div>
           </div>
         </div>
+        )}
+
+        {activeTab === "customOrder" && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1.2fr)",
+            gap: "20px",
+            alignItems: "flex-start",
+          }}
+        >
+          {/* Left column: button controls */}
+          <div>
+            {/* Preview */}
+            <div style={styles.card}>
+              <div style={styles.cardTitle}>Preview</div>
+              <div
+                style={{
+                  ...styles.previewArea,
+                  justifyContent: "center",
+                }}
+              >
+                <button type="button" style={customOrderPreviewButtonStyle}>
+                  {formState.customOrderButtonIcon !== "none" && iconSvgs[formState.customOrderButtonIcon]}
+                  {formState.customOrderButtonText}
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable settings below preview */}
+            <div
+              style={{
+                marginTop: "16px",
+                maxHeight: "calc(100vh - 420px)",
+                height: "calc(100vh - 420px)",
+                overflowY: "auto",
+                overflowX: "hidden",
+                paddingRight: "8px",
+                paddingBottom: "20px",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              {/* Button Settings */}
+              <div style={styles.card}>
+                <div style={styles.cardTitle}>Button Settings</div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Button Text</label>
+                  <input
+                    type="text"
+                    style={styles.input}
+                    name="customOrderButtonText"
+                    value={formState.customOrderButtonText}
+                    onChange={(e) => handleChange("customOrderButtonText", e.target.value)}
+                  />
+                </div>
+
+                <div style={styles.formGroup}>
+                  <label style={styles.label}>Button Icon</label>
+                  <select
+                    style={styles.select}
+                    name="customOrderButtonIcon"
+                    value={formState.customOrderButtonIcon}
+                    onChange={(e) => handleChange("customOrderButtonIcon", e.target.value)}
+                  >
+                    <option value="ruler">Ruler</option>
+                    <option value="shirt">Shirt</option>
+                    <option value="grid">Grid</option>
+                    <option value="info">Info</option>
+                    <option value="hanger">Hanger</option>
+                    <option value="none">No Icon</option>
+                  </select>
+                </div>
+
+                <div style={styles.formGrid}>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Text Color</label>
+                    <div style={styles.colorInputWrapper}>
+                      <input
+                        type="color"
+                        style={styles.colorSwatch}
+                        name="customOrderButtonTextColor"
+                        value={formState.customOrderButtonTextColor}
+                        onChange={(e) => handleChange("customOrderButtonTextColor", e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        style={styles.colorTextInput}
+                        value={formState.customOrderButtonTextColor}
+                        onChange={(e) => handleChange("customOrderButtonTextColor", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Background Color</label>
+                    <div style={styles.colorInputWrapper}>
+                      <input
+                        type="color"
+                        style={styles.colorSwatch}
+                        name="customOrderButtonBgColor"
+                        value={formState.customOrderButtonBgColor}
+                        onChange={(e) => handleChange("customOrderButtonBgColor", e.target.value)}
+                      />
+                      <input
+                        type="text"
+                        style={styles.colorTextInput}
+                        value={formState.customOrderButtonBgColor}
+                        onChange={(e) => handleChange("customOrderButtonBgColor", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Border Settings */}
+              <div style={styles.card}>
+                <div style={styles.cardTitle}>Border Settings</div>
+
+                <div style={styles.formGrid}>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Border Style</label>
+                    <select
+                      style={styles.select}
+                      name="customOrderButtonBorderStyle"
+                      value={formState.customOrderButtonBorderStyle}
+                      onChange={(e) => handleChange("customOrderButtonBorderStyle", e.target.value)}
+                    >
+                      <option value="none">None</option>
+                      <option value="solid">Solid</option>
+                      <option value="dashed">Dashed</option>
+                      <option value="dotted">Dotted</option>
+                    </select>
+                  </div>
+
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Corner Radius</label>
+                    <div style={styles.rangeWrapper}>
+                      <input
+                        type="range"
+                        style={styles.rangeInput}
+                        name="customOrderButtonBorderRadius"
+                        min="0"
+                        max="30"
+                        value={formState.customOrderButtonBorderRadius}
+                        onChange={(e) =>
+                          handleChange("customOrderButtonBorderRadius", parseInt(e.target.value))
+                        }
+                      />
+                      <span style={styles.rangeValue}>{formState.customOrderButtonBorderRadius}px</span>
+                    </div>
+                  </div>
+                </div>
+
+                {formState.customOrderButtonBorderStyle === "solid" && (
+                  <>
+                    <div style={styles.formGrid}>
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>Border Color</label>
+                        <div style={styles.colorInputWrapper}>
+                          <input
+                            type="color"
+                            style={styles.colorSwatch}
+                            name="customOrderButtonBorderColor"
+                            value={formState.customOrderButtonBorderColor}
+                            onChange={(e) =>
+                              handleChange("customOrderButtonBorderColor", e.target.value)
+                            }
+                          />
+                          <input
+                            type="text"
+                            style={styles.colorTextInput}
+                            value={formState.customOrderButtonBorderColor}
+                            onChange={(e) =>
+                              handleChange("customOrderButtonBorderColor", e.target.value)
+                            }
+                          />
+                        </div>
+                      </div>
+
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>Border Width</label>
+                        <div style={styles.rangeWrapper}>
+                          <input
+                            type="range"
+                            style={styles.rangeInput}
+                            name="customOrderButtonBorderWidth"
+                            min="1"
+                            max="5"
+                            value={formState.customOrderButtonBorderWidth}
+                            onChange={(e) =>
+                              handleChange("customOrderButtonBorderWidth", parseInt(e.target.value))
+                            }
+                          />
+                          <span style={styles.rangeValue}>{formState.customOrderButtonBorderWidth}px</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: "12px" }}>
+                      <label style={styles.label}>Border Sides</label>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                          gap: "8px",
+                        }}
+                      >
+                        {[
+                          ["Top", "customOrderButtonBorderTop"],
+                          ["Right", "customOrderButtonBorderRight"],
+                          ["Bottom", "customOrderButtonBorderBottom"],
+                          ["Left", "customOrderButtonBorderLeft"],
+                        ].map(([label, field]) => {
+                          const isOn = !!formState[field];
+                          return (
+                            <label
+                              key={field}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                fontSize: "13px",
+                                color: "#374151",
+                                cursor: "pointer",
+                              }}
+                            >
+                              {/* Hidden checkbox for form submit */}
+                              <input
+                                type="checkbox"
+                                name={field}
+                                checked={isOn}
+                                onChange={(e) => handleChange(field, e.target.checked)}
+                                style={{
+                                  position: "absolute",
+                                  opacity: 0,
+                                  width: 0,
+                                  height: 0,
+                                }}
+                              />
+                              {/* Visual switch */}
+                              <span
+                                style={{
+                                  width: 32,
+                                  height: 18,
+                                  borderRadius: 9999,
+                                  backgroundColor: isOn ? "#111827" : "#e5e7eb",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  padding: 2,
+                                  boxSizing: "border-box",
+                                  transition: "background-color 0.15s ease",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 14,
+                                    height: 14,
+                                    borderRadius: 9999,
+                                    backgroundColor: "#ffffff",
+                                    boxShadow:
+                                      "0 1px 2px rgba(0,0,0,0.15)",
+                                    transform: isOn
+                                      ? "translateX(14px)"
+                                      : "translateX(0)",
+                                    transition: "transform 0.15s ease",
+                                  }}
+                                />
+                              </span>
+                              <span>{label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right column: empty for custom order button */}
+          <div></div>
+        </div>
+        )}
       </form>
     </div>
   );

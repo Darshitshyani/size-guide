@@ -53,6 +53,18 @@ export const loader = async ({ request }) => {
         buttonBorderBottom: true,
         buttonBorderLeft: true,
         tableDesign: "classic",
+        customOrderButtonText: "Custom Order",
+        customOrderButtonIcon: "ruler",
+        customOrderButtonTextColor: "#ffffff",
+        customOrderButtonBgColor: "#111111",
+        customOrderButtonBorderRadius: 6,
+        customOrderButtonBorderStyle: "none",
+        customOrderButtonBorderColor: "#111111",
+        customOrderButtonBorderWidth: 1,
+        customOrderButtonBorderTop: true,
+        customOrderButtonBorderRight: true,
+        customOrderButtonBorderBottom: true,
+        customOrderButtonBorderLeft: true,
       };
     }
 
