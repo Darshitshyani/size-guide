@@ -2186,11 +2186,45 @@ export default function Templates() {
                         <tbody>
                           {rows.map((row, idx) => (
                             <tr key={idx} className="hover:bg-gray-50">
-                              {cols.map((col) => (
-                                <td key={col.key} className="px-4 py-3 text-sm text-gray-900 border border-gray-200">
-                                  {row[col.key] || "-"}
-                                </td>
-                              ))}
+                              {cols.map((col) => {
+                                const value = row[col.key];
+                                if (!value || value === "-") {
+                                  return (
+                                    <td key={col.key} className="px-4 py-3 text-sm text-gray-900 border border-gray-200">
+                                      -
+                                    </td>
+                                  );
+                                }
+                                
+                                // Check if this is a measurement column (not "size")
+                                const isMeasurementColumn = col.key !== "size" && col.label && (col.label.includes("(in)") || col.label.includes("(cm)"));
+                                
+                                // Convert value if needed
+                                let displayValue = value;
+                                if (isMeasurementColumn && modalUnit === "cm") {
+                                  // Convert from inches to cm (assuming stored values are in inches)
+                                  const numValue = parseFloat(value);
+                                  if (!isNaN(numValue)) {
+                                    displayValue = (numValue * 2.54).toFixed(1);
+                                    // Remove trailing .0 if it's a whole number
+                                    if (displayValue.endsWith('.0')) {
+                                      displayValue = displayValue.replace('.0', '');
+                                    }
+                                  }
+                                } else if (isMeasurementColumn && modalUnit === "In") {
+                                  // Ensure values are displayed as-is for inches
+                                  const numValue = parseFloat(value);
+                                  if (!isNaN(numValue)) {
+                                    displayValue = numValue.toString();
+                                  }
+                                }
+                                
+                                return (
+                                  <td key={col.key} className="px-4 py-3 text-sm text-gray-900 border border-gray-200">
+                                    {displayValue}
+                                  </td>
+                                );
+                              })}
                             </tr>
                           ))}
                         </tbody>
